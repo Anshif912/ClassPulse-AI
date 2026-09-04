@@ -1,0 +1,24 @@
+{
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/meetings.space.readonly",
+    "https://www.googleapis.com/auth/meetings.space.created"
+  ],
+  "addOns": {
+    "common": {
+      "name": "ClassPulse AI - Your AI Classroom Companion",
+      "logoUrl": "https://lh3.googleusercontent.com/a/default-user=s64",
+      "layoutProperties": {
+        "primaryColor": "#2563eb",
+        "secondaryColor": "#4f46e5"
+      }
+    },
+    "meet": {
+      "web": {
+        "sidePanelUrl": "https://localhost:5173/addon/side-panel",
+        "mainStageUrl": "https://localhost:5173/addon/main-stage"
+      }
+    }
+  }
+}

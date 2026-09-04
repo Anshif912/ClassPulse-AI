@@ -1,0 +1,455 @@
+{
+  "sessions": {
+    "test_session_context": {
+      "id": "test_session_context",
+      "meetingUrl": "https://meet.google.com/abc-defg-hij",
+      "normalizedMeetingUrl": "https://meet.google.com/abc-defg-hij",
+      "participantId": "student_123",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T16:57:04.954Z",
+      "currentTopic": "Linear Equations in One Variable",
+      "recentQuestions": [
+        "How do I solve 2x + 5 = 0?"
+      ],
+      "conversationHistory": [
+        {
+          "id": "msg_1",
+          "sessionId": "test_session_context",
+          "role": "student",
+          "content": "How do I solve 2x + 5 = 0?",
+          "timestamp": "2026-09-04T16:57:04.955Z"
+        },
+        {
+          "id": "msg_2",
+          "sessionId": "test_session_context",
+          "role": "companion",
+          "content": "Subtract 5 from both sides: 2x = -5, then divide by 2 to get x = -2.5",
+          "timestamp": "2026-09-04T16:57:04.955Z",
+          "ragContext": {
+            "topic": "Linear Equations in One Variable",
+            "chapter": "Algebra",
+            "relevanceScore": 1,
+            "matchedKeywords": [
+              "2x+5=0"
+            ]
+          }
+        }
+      ],
+      "notes": []
+    },
+    "session_1788539935553_zevpd": {
+      "id": "session_1788539935553_zevpd",
+      "meetingUrl": "https://meet.google.com/abc-defg-hij",
+      "normalizedMeetingUrl": "https://meet.google.com/abc-defg-hij",
+      "participantId": "student_6159",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T16:38:55.553Z",
+      "subject": "STEM Class",
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788540127921_pc4k1": {
+      "id": "session_1788540127921_pc4k1",
+      "meetingUrl": "https://meet.google.com/zux-anks-gnw",
+      "normalizedMeetingUrl": "https://meet.google.com/zux-anks-gnw",
+      "participantId": "student_7285",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T16:42:07.921Z",
+      "subject": "STEM Class",
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "test_sess_url_exact": {
+      "id": "test_sess_url_exact",
+      "meetingUrl": "https://meet.google.com/abc-defg-hij?authuser=1&pli=1",
+      "originalMeetingUrl": "   https://meet.google.com/abc-defg-hij?authuser=1&pli=1   ",
+      "normalizedMeetingUrl": "https://meet.google.com/abc-defg-hij?authuser=1&pli=1",
+      "participantId": "student_99",
+      "startedAt": "2026-09-04T16:57:04.955Z",
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788541423316_qwevu": {
+      "id": "session_1788541423316_qwevu",
+      "meetingUrl": "https://meet.google.com/xre-jexy-eup",
+      "originalMeetingUrl": "https://meet.google.com/xre-jexy-eup",
+      "normalizedMeetingUrl": "https://meet.google.com/xre-jexy-eup",
+      "meetingCode": "xre-jexy-eup",
+      "participantId": "student_2996",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T17:03:43.316Z",
+      "subject": "STEM Class",
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788544459747_e762y": {
+      "id": "session_1788544459747_e762y",
+      "meetingUrl": "https://meet.google.com/iyx-ewua-aho",
+      "originalMeetingUrl": "https://meet.google.com/iyx-ewua-aho",
+      "normalizedMeetingUrl": "https://meet.google.com/iyx-ewua-aho",
+      "meetingCode": "iyx-ewua-aho",
+      "participantId": "student_1184",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T17:54:19.747Z",
+      "subject": "STEM Class",
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788544493656_3znna": {
+      "id": "session_1788544493656_3znna",
+      "meetingUrl": "https://meet.google.com/iyx-ewua-aho",
+      "originalMeetingUrl": "https://meet.google.com/iyx-ewua-aho",
+      "normalizedMeetingUrl": "https://meet.google.com/iyx-ewua-aho",
+      "meetingCode": "iyx-ewua-aho",
+      "participantId": "student_1316",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T17:54:53.656Z",
+      "subject": "STEM Class",
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788545683372_335b2": {
+      "id": "session_1788545683372_335b2",
+      "meetingUrl": "https://meet.google.com/azb-hgnd-won",
+      "originalMeetingUrl": "https://meet.google.com/azb-hgnd-won",
+      "normalizedMeetingUrl": "https://meet.google.com/azb-hgnd-won",
+      "meetingCode": "azb-hgnd-won",
+      "participantId": "student_6736",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T18:14:43.373Z",
+      "subject": "STEM Class",
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788548644283_f7pmm": {
+      "id": "session_1788548644283_f7pmm",
+      "meetingUrl": "https://meet.google.com/pqz-saby-jof",
+      "originalMeetingUrl": "https://meet.google.com/pqz-saby-jof",
+      "normalizedMeetingUrl": "https://meet.google.com/pqz-saby-jof",
+      "meetingCode": "pqz-saby-jof",
+      "participantId": "student_8095",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T19:04:04.283Z",
+      "subject": "STEM Class",
+      "chapter": "Algebra",
+      "isAddonSession": false,
+      "recentQuestions": [
+        "hi",
+        "i have a doubt ?",
+        "what is 2+5",
+        "hi"
+      ],
+      "conversationHistory": [
+        {
+          "id": "msg_1788548804608_student",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "student",
+          "content": "hi",
+          "timestamp": "2026-09-04T19:06:44.608Z"
+        },
+        {
+          "id": "msg_1788548804608_companion",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "companion",
+          "content": "Hi Jeevan! I'm ClassPulse, your AI learning companion. How can I help you with today's class?",
+          "timestamp": "2026-09-04T19:06:44.608Z",
+          "intent": "casual"
+        },
+        {
+          "id": "msg_1788548836261_student",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "student",
+          "content": "i have a doubt ?",
+          "timestamp": "2026-09-04T19:07:16.261Z"
+        },
+        {
+          "id": "msg_1788548836261_companion",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "companion",
+          "content": "I noticed you asked: *\"i have a doubt ?\"* in your **STEM Class** class.\n\nWhile this exact query didn't match a pre-indexed concept directly, I can assist you with core STEM subjects including:\n- **Mathematics**: Linear Equations, Quadratic Formula, Calculus\n- **Physics**: Newton's Laws of Motion, Work & Energy, Thermodynamics\n- **Chemistry**: Periodic Trends, Chemical Bonding, Acids & Bases\n- **Biology**: Photosynthesis, Cell Biology, DNA & Genetics\n- **Computer Science**: Data Structures & Algorithms\n\nCould you specify the topic or share the specific problem you're working on?",
+          "timestamp": "2026-09-04T19:07:16.261Z",
+          "intent": "educational"
+        },
+        {
+          "id": "msg_1788548906405_student",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "student",
+          "content": "what is 2+5",
+          "timestamp": "2026-09-04T19:08:26.404Z"
+        },
+        {
+          "id": "msg_1788548906405_companion",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "companion",
+          "content": "I noticed you asked: *\"what is 2+5\"* in your **STEM Class** class.\n\nWhile this exact query didn't match a pre-indexed concept directly, I can assist you with core STEM subjects including:\n- **Mathematics**: Linear Equations, Quadratic Formula, Calculus\n- **Physics**: Newton's Laws of Motion, Work & Energy, Thermodynamics\n- **Chemistry**: Periodic Trends, Chemical Bonding, Acids & Bases\n- **Biology**: Photosynthesis, Cell Biology, DNA & Genetics\n- **Computer Science**: Data Structures & Algorithms\n\nCould you specify the topic or share the specific problem you're working on?",
+          "timestamp": "2026-09-04T19:08:26.404Z",
+          "intent": "educational"
+        },
+        {
+          "id": "msg_1788548927648_student",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "student",
+          "content": "hi",
+          "timestamp": "2026-09-04T19:08:47.648Z"
+        },
+        {
+          "id": "msg_1788548927648_companion",
+          "sessionId": "session_1788548644283_f7pmm",
+          "role": "companion",
+          "content": "Hi Jeevan! I'm ClassPulse, your AI learning companion. How can I help you with today's class?",
+          "timestamp": "2026-09-04T19:08:47.648Z",
+          "intent": "casual"
+        }
+      ],
+      "notes": []
+    },
+    "session_1788551465500_p9567": {
+      "id": "session_1788551465500_p9567",
+      "meetingUrl": "https://meet.google.com/vva-cwbd-bkb",
+      "originalMeetingUrl": "https://meet.google.com/vva-cwbd-bkb",
+      "normalizedMeetingUrl": "https://meet.google.com/vva-cwbd-bkb",
+      "meetingCode": "vva-cwbd-bkb",
+      "participantId": "student_6963",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T19:51:05.500Z",
+      "subject": "STEM Class",
+      "chapter": "Algebra",
+      "isAddonSession": false,
+      "recentQuestions": [
+        "hi",
+        "i have a doubt",
+        "what is 2+5",
+        "how",
+        "how 2+5 is 7",
+        "how are you",
+        "what is science",
+        "you only tell me the addition of numbers",
+        "i dont want this"
+      ],
+      "conversationHistory": [
+        {
+          "id": "msg_1788551530543_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "hi",
+          "timestamp": "2026-09-04T19:52:10.543Z"
+        },
+        {
+          "id": "msg_1788551530543_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "Hi Jeevan! 😊 How can I help you with today's class?",
+          "timestamp": "2026-09-04T19:52:10.543Z",
+          "intent": "greeting"
+        },
+        {
+          "id": "msg_1788551846356_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "i have a doubt",
+          "timestamp": "2026-09-04T19:57:26.356Z"
+        },
+        {
+          "id": "msg_1788551846356_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "Of course! 😊 What is your doubt? You can ask me without any hesitation.",
+          "timestamp": "2026-09-04T19:57:26.356Z",
+          "intent": "doubt_request"
+        },
+        {
+          "id": "msg_1788551857139_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "what is 2+5",
+          "timestamp": "2026-09-04T19:57:37.139Z"
+        },
+        {
+          "id": "msg_1788551857139_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "7",
+          "timestamp": "2026-09-04T19:57:37.139Z",
+          "intent": "simple_math",
+          "ragContext": {
+            "topic": "Basic Arithmetic",
+            "chapter": "",
+            "relevanceScore": 1,
+            "matchedKeywords": []
+          }
+        },
+        {
+          "id": "msg_1788551864387_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "how",
+          "timestamp": "2026-09-04T19:57:44.387Z"
+        },
+        {
+          "id": "msg_1788551864387_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "I'm not sure I understood that. Could you ask your question another way?",
+          "timestamp": "2026-09-04T19:57:44.387Z",
+          "intent": "unknown"
+        },
+        {
+          "id": "msg_1788551877648_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "how 2+5 is 7",
+          "timestamp": "2026-09-04T19:57:57.648Z"
+        },
+        {
+          "id": "msg_1788551877648_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "I'm not sure I understood that. Could you ask your question another way?",
+          "timestamp": "2026-09-04T19:57:57.648Z",
+          "intent": "unknown"
+        },
+        {
+          "id": "msg_1788551884289_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "how are you",
+          "timestamp": "2026-09-04T19:58:04.289Z"
+        },
+        {
+          "id": "msg_1788551884289_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "I'm not sure I understood that. Could you ask your question another way?",
+          "timestamp": "2026-09-04T19:58:04.289Z",
+          "intent": "unknown"
+        },
+        {
+          "id": "msg_1788551895473_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "what is science",
+          "timestamp": "2026-09-04T19:58:15.473Z"
+        },
+        {
+          "id": "msg_1788551895473_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "I'm not sure I understood that. Could you ask your question another way?",
+          "timestamp": "2026-09-04T19:58:15.473Z",
+          "intent": "unknown"
+        },
+        {
+          "id": "msg_1788552188887_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "you only tell me the addition of numbers",
+          "timestamp": "2026-09-04T20:03:08.887Z"
+        },
+        {
+          "id": "msg_1788552188887_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "### Linear Equations in One Variable (Mathematics — Algebra)\n\nA linear equation in one variable is an equation of the form ax + b = c, where a != 0. To solve it, we isolate the variable by applying inverse operations equally to both sides.\n\n\n**Key Concepts:**\n\n- Additive Inverse / Transposition: Moving terms across the equals sign changes their sign (+ becomes -, - becomes +).\n\n- Multiplicative Inverse: Dividing or multiplying both sides by the variable coefficient to isolate x.\n\n- Equation Balance Principle: Whatever operation is performed on the left-hand side must be performed identically on the right-hand side.\n\n\n**Detailed Explanation:**\n\nTo solve a linear equation like ax + b = c:\nStep 1: Subtract or add the constant term b from both sides so that terms containing x are alone on one side (ax = c - b).\nStep 2: Divide both sides by the coefficient a (x = (c - b) / a).\nStep 3: Simplify the resulting fraction or decimal to find the exact value of x.\n\n\n**Example:**\n\n> 2x + 5 = 0 -> 2x = -5 -> x = -2.5",
+          "timestamp": "2026-09-04T20:03:08.887Z",
+          "intent": "educational",
+          "ragContext": {
+            "topic": "Linear Equations in One Variable",
+            "chapter": "Algebra",
+            "relevanceScore": 0.43,
+            "matchedKeywords": [
+              "add"
+            ]
+          }
+        },
+        {
+          "id": "msg_1788552199227_student",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "student",
+          "content": "i dont want this",
+          "timestamp": "2026-09-04T20:03:19.227Z"
+        },
+        {
+          "id": "msg_1788552199227_companion",
+          "sessionId": "session_1788551465500_p9567",
+          "role": "companion",
+          "content": "I'm not sure I understood that. Could you ask your question another way?",
+          "timestamp": "2026-09-04T20:03:19.227Z",
+          "intent": "unknown"
+        }
+      ],
+      "notes": [],
+      "currentTopic": "Linear Equations in One Variable"
+    },
+    "session_1788553782370_po003": {
+      "id": "session_1788553782370_po003",
+      "meetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "originalMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "normalizedMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "meetingCode": "qnw-jrvn-adb",
+      "participantId": "student_1275",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T20:29:42.370Z",
+      "subject": "STEM Class",
+      "chapter": "Algebra",
+      "isAddonSession": false,
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788554242746_ks7vx": {
+      "id": "session_1788554242746_ks7vx",
+      "meetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "originalMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "normalizedMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "meetingCode": "qnw-jrvn-adb",
+      "participantId": "student_4221",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T20:37:22.747Z",
+      "subject": "STEM Class",
+      "chapter": "Algebra",
+      "isAddonSession": false,
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788554515900_jofz0": {
+      "id": "session_1788554515900_jofz0",
+      "meetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "originalMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "normalizedMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "meetingCode": "qnw-jrvn-adb",
+      "participantId": "student_9436",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T20:41:55.900Z",
+      "subject": "STEM Class",
+      "chapter": "Algebra",
+      "isAddonSession": false,
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    },
+    "session_1788554945207_iknq7": {
+      "id": "session_1788554945207_iknq7",
+      "meetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "originalMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "normalizedMeetingUrl": "https://meet.google.com/qnw-jrvn-adb",
+      "meetingCode": "qnw-jrvn-adb",
+      "participantId": "student_7677",
+      "participantName": "Jeevan",
+      "startedAt": "2026-09-04T20:49:05.207Z",
+      "subject": "STEM Class",
+      "chapter": "Algebra",
+      "isAddonSession": false,
+      "recentQuestions": [],
+      "conversationHistory": [],
+      "notes": []
+    }
+  }
+}
