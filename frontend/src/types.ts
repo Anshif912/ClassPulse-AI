@@ -1,3 +1,5 @@
+// ─── Existing Types (preserved) ─────────────────────────────────────────────
+
 export interface Session {
   id: string;
   meetingUrl: string;
@@ -16,6 +18,7 @@ export interface Session {
   conversationHistory: ChatMessage[];
   notes?: string[];
   isAddonSession?: boolean;
+  classId?: string;
 }
 
 export type MessageRole = 'student' | 'companion' | 'system';
@@ -59,27 +62,34 @@ export interface ChatRequest {
   sessionId: string;
   message: string;
   source?: 'text' | 'voice';
-  subject?: string;
-  chapter?: string;
 }
 
 export interface ChatResponse {
   message: ChatMessage;
   spokenText: string;
   isEducational: boolean;
-  intent: 'casual' | 'equation' | 'educational' | 'followup';
+  intent: string;
   proactiveSuggestion?: string;
-  voiceUrl?: string;
-  voiceEngine: 'agora' | 'browser_fallback';
-}
-
-export interface CreateSessionRequest {
-  meetingUrl: string;
-  participantName?: string;
-  participantEmail?: string;
-  subject?: string;
-  chapter?: string;
-  isAddon?: boolean;
+  voiceEngine?: 'agora' | 'browser_fallback';
+  detectedLanguage?: 'en' | 'ta' | 'tanglish' | 'hi' | 'unknown';
+  voiceLocale?: 'en-US' | 'ta-IN' | 'hi-IN';
+  evidenceState?: 'STRONG_EVIDENCE' | 'PARTIAL_EVIDENCE' | 'NO_COURSE_NOTES' | 'NO_COURSE_EVIDENCE' | 'CASUAL_OR_GREETING' | 'OFF_TOPIC';
+  sources?: Array<{
+    materialId: string;
+    title: string;
+    relevanceScore: number;
+    chunkId?: string;
+  }>;
+  diagnostics?: {
+    originalQuery: string;
+    detectedLanguage: string;
+    resolvedQuery?: string;
+    isFollowUp: boolean;
+    evidenceState: string;
+    chunksRetrieved: number;
+    promptTokensEst?: number;
+    durationMs: number;
+  };
 }
 
 export interface CreateSessionResponse {
@@ -159,4 +169,115 @@ export interface EducationalTopic {
     question: string;
     answer: string;
   }>;
+}
+
+// ─── Native Classroom Types ──────────────────────────────────────────────────
+
+export interface Classroom {
+  classId: string;
+  name: string;
+  subject: string;
+  teacherName: string;
+  agoraChannel: string;
+  status: 'active' | 'ended';
+  createdAt: string;
+  materialCount: number;
+}
+
+export interface ClassroomMaterialSummary {
+  id: string;
+  title: string;
+  uploadedAt: string;
+  fileType: 'text' | 'pdf';
+}
+
+export interface CreateClassRequest {
+  name: string;
+  subject: string;
+  teacherName?: string;
+  teacherId?: string;
+}
+
+export interface CreateClassResponse {
+  classId: string;
+  name: string;
+  subject: string;
+  teacherName: string;
+  agoraChannel: string;
+  joinUrl: string;
+  createdAt: string;
+}
+
+export interface AgoraTokenResponse {
+  appId: string;
+  channel: string;
+  token: string;
+  uid: number;
+  expiresAt: number;
+  userName?: string;
+  userAvatar?: string;
+  role?: string;
+}
+
+// ─── RTC Participant Types ────────────────────────────────────────────────────
+
+export type ParticipantRole = 'teacher' | 'student';
+
+export interface RtcParticipant {
+  uid: number;
+  userId?: string;
+  name: string;
+  role: ParticipantRole;
+  avatarUrl?: string;
+  hasVideo: boolean;
+  hasAudio: boolean;
+  isSpeaking: boolean;
+  isLocal: boolean;
+  isScreenSharing?: boolean;
+  isPinned?: boolean;
+  connectionQuality?: 'excellent' | 'good' | 'poor' | 'unknown';
+}
+
+export type ConnectionState =
+  | 'DISCONNECTED'
+  | 'CONNECTING'
+  | 'CONNECTED'
+  | 'RECONNECTING'
+  | 'DISCONNECTING'
+  | 'FAILED';
+
+export interface PreJoinConfig {
+  name: string;
+  cameraEnabled: boolean;
+  micEnabled: boolean;
+  role: ParticipantRole;
+  uid: number;
+}
+
+export interface ClassroomChatMessage {
+  id: string;
+  classId: string;
+  participantId: string;
+  participantName: string;
+  message: string;
+  timestamp: string;
+  isAI?: boolean;
+}
+
+// ─── Classroom Event / Toast System ───────────────────────────────────────────
+export type ClassroomEventType =
+  | 'PARTICIPANT_JOINED'
+  | 'PARTICIPANT_LEFT'
+  | 'SCREEN_SHARE_STARTED'
+  | 'SCREEN_SHARE_STOPPED'
+  | 'SYSTEM';
+
+export interface ClassroomEvent {
+  id: string;
+  type: ClassroomEventType;
+  userId?: string;
+  agoraUid?: number;
+  displayName: string;
+  timestamp: string;
+  message: string;
 }

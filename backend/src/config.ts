@@ -1,7 +1,9 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load .env from backend directory or project root
+// Load .env from backend directory, project root, and process.cwd()
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
@@ -20,6 +22,10 @@ export const config = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
+  },
+  gemini: {
+    apiKey: (process.env.GEMINI_API_KEY || '').trim(),
+    isConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0),
   },
   cors: {
     origin: '*',

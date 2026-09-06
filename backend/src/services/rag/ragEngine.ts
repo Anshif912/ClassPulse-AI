@@ -7,7 +7,7 @@ import {
   ArithmeticResult,
   ArithmeticExplanationResult,
 } from './mathSolver';
-import { Session, ChatMessage } from '../db.service';
+import { Session, ChatMessage, dbService } from '../db.service';
 import { config } from '../../config';
 
 export type MessageIntent =
@@ -504,6 +504,17 @@ export class RAGEngine {
 
     const queryLower = query.toLowerCase();
 
+    // 0. STEP: CLASSROOM-SCOPED MATERIAL CHUNKS & PDF CONTEXT RETRIEVAL
+    if (session?.classId) {
+      const classChunks = dbService.getMaterialChunksForClass(session.classId);
+      if (classChunks && classChunks.length > 0) {
+        const chunkResult = this.retrieveFromClassChunks(query, queryTokens, classChunks);
+        if (chunkResult) {
+          return chunkResult;
+        }
+      }
+    }
+
     // Check exact FAQ matches first in corpus
     for (const doc of this.corpus) {
       for (const faq of doc.frequentlyAskedDoubts) {
@@ -607,6 +618,81 @@ export class RAGEngine {
       relevanceScore: parseFloat(score.toFixed(2)),
       matchedKeywords,
     };
+  }
+
+  /**
+   * Retrieves and ranks class-scoped material chunks (including uploaded PDFs).
+   * Enforces strict class boundary and attaches page citation metadata.
+   */
+  private retrieveFromClassChunks(
+    query: string,
+    queryTokens: string[],
+    chunks: import('../db.service').MaterialChunk[]
+  ): RAGResponse | null {
+    const queryLower = query.toLowerCase();
+    let bestChunk: import('../db.service').MaterialChunk | null = null;
+    let highestScore = 0;
+    let bestMatchedWords: string[] = [];
+
+    for (const chunk of chunks) {
+      let score = 0;
+      const matchedWords: string[] = [];
+      const chunkLower = chunk.content.toLowerCase();
+      const titleLower = chunk.title.toLowerCase();
+
+      // Title match boost
+      for (const token of queryTokens) {
+        if (titleLower.includes(token)) {
+          score += 3.0;
+          matchedWords.push(token);
+        }
+      }
+
+      // Content keyword occurrence scoring
+      const contentTokens = tokenize(chunk.content);
+      for (const token of queryTokens) {
+        const count = contentTokens.filter((t) => t === token).length;
+        if (count > 0) {
+          score += Math.min(count * 1.2, 5.0);
+          matchedWords.push(token);
+        }
+      }
+
+      // Exact substring match boost
+      if (chunkLower.includes(queryLower)) {
+        score += 6.0;
+      }
+
+      const normalizedScore = score / (queryTokens.length * 2 + 1);
+
+      if (normalizedScore > highestScore) {
+        highestScore = normalizedScore;
+        bestChunk = chunk;
+        bestMatchedWords = matchedWords;
+      }
+    }
+
+    if (bestChunk && highestScore >= 0.35) {
+      const pageCitation = bestChunk.pageNumber
+        ? `\n\n*Based on: ${bestChunk.title} — Page ${bestChunk.pageNumber}*`
+        : `\n\n*Based on: ${bestChunk.title}*`;
+
+      const formattedAnswer = `### ${bestChunk.title}\n\n${bestChunk.content}${pageCitation}`;
+      const spokenSummary = bestChunk.content.split('\n')[0].replace(/[*#>_]/g, '');
+
+      return {
+        answerText: formattedAnswer,
+        spokenText: spokenSummary,
+        intent: 'educational',
+        isEducational: true,
+        topic: bestChunk.title,
+        chapter: bestChunk.pageNumber ? `Page ${bestChunk.pageNumber}` : 'Course Material',
+        relevanceScore: parseFloat(highestScore.toFixed(2)),
+        matchedKeywords: Array.from(new Set(bestMatchedWords)),
+      };
+    }
+
+    return null;
   }
 
   private generateProactiveSuggestion(topic?: string, session?: Session): string | undefined {

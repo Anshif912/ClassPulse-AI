@@ -1,0 +1,23 @@
+.pixel-snow-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  contain: layout style paint;
+  pointer-events: none;
+  z-index: -10 !important;
+}
+
+.pixel-snow-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: -10 !important;
+}

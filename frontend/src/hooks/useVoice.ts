@@ -25,10 +25,6 @@ export function useVoice({ voiceMode, agoraConfig, onRecognizedSpeech, onError }
   const agoraClientRef = useRef<IAgoraRTCClient | null>(null);
   const localAudioTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
 
-  // Web Speech API refs
-  const recognitionRef = useRef<any>(null);
-  const synthRef = useRef<SpeechSynthesis | null>(typeof window !== 'undefined' ? window.speechSynthesis : null);
-
   // Auto-stop inactivity timer (Fix 4)
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,66 +36,15 @@ export function useVoice({ voiceMode, agoraConfig, onRecognizedSpeech, onError }
     }, 5 * 60 * 1000);
   }, []);
 
-  // Initialize Speech Recognition for Browser Fallback
+  // Browser Web Speech API strictly disabled in favor of Agora Conversational AI Agent
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        recognition.onstart = () => {
-          setVoiceState('listening');
-          setIsMicActive(true);
-          resetInactivityTimer();
-        };
-
-        recognition.onresult = (event: any) => {
-          let currentTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            currentTranscript += event.results[i][0].transcript;
-          }
-          setTranscript(currentTranscript);
-
-          if (event.results[0].isFinal) {
-            setVoiceState('thinking');
-            if (onRecognizedSpeech && currentTranscript.trim()) {
-              onRecognizedSpeech(currentTranscript.trim());
-            }
-          }
-        };
-
-        recognition.onerror = (event: any) => {
-          console.warn('[SPEECH RECOGNITION ERROR]', event.error);
-          if (event.error === 'not-allowed') {
-            onError?.('Microphone access was denied. Please allow microphone permissions in your browser.');
-          } else if (event.error !== 'no-speech') {
-            onError?.(`Voice error: ${event.error}`);
-          }
-          setVoiceState('idle');
-          setIsMicActive(false);
-        };
-
-        recognition.onend = () => {
-          setIsMicActive(false);
-          setVoiceState(prev => (prev === 'listening' ? 'idle' : prev));
-        };
-
-        recognitionRef.current = recognition;
-      }
-    }
-
+    // Zero browser fallback: Web Speech API is permanently disabled in production
     return () => {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
-      }
       if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
     };
   }, [onRecognizedSpeech, onError, resetInactivityTimer]);
 
-  // Clean teardown on unmount & beforeunload (Fix 4)
+  // Clean teardown on unmount & beforeunload
   useEffect(() => {
     const handleBeforeUnload = () => {
       stopAllAudio();
@@ -113,12 +58,6 @@ export function useVoice({ voiceMode, agoraConfig, onRecognizedSpeech, onError }
   }, []);
 
   const stopAllAudio = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-    }
-    if (synthRef.current) {
-      try { synthRef.current.cancel(); } catch {}
-    }
     if (localAudioTrackRef.current) {
       try {
         localAudioTrackRef.current.stop();
@@ -134,66 +73,18 @@ export function useVoice({ voiceMode, agoraConfig, onRecognizedSpeech, onError }
     setIsMicActive(false);
   }, []);
 
-  // Speak AI answer aloud with natural female voice
-  const speakText = useCallback((text: string, onComplete?: () => void) => {
-    if (!text || typeof window === 'undefined') return;
-
-    if (synthRef.current) {
-      synthRef.current.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.05;
-
-      const voices = synthRef.current.getVoices();
-      const preferredVoice = voices.find(
-        v => (v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Jenny') || v.name.includes('Google UK English Female') || v.name.includes('Zira')) && v.lang.startsWith('en')
-      ) || voices.find(v => v.lang.startsWith('en'));
-
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
-      }
-
-      utterance.onstart = () => {
-        setVoiceState('speaking');
-        resetInactivityTimer();
-      };
-
-      utterance.onend = () => {
-        setVoiceState('idle');
-        onComplete?.();
-      };
-
-      utterance.onerror = () => {
-        setVoiceState('idle');
-        onComplete?.();
-      };
-
-      synthRef.current.speak(utterance);
-    }
-  }, [resetInactivityTimer]);
+  const speakText = useCallback((_text: string, onComplete?: () => void) => {
+    // Browser speechSynthesis is completely removed. Agent audio is streamed over Agora RTC.
+    onComplete?.();
+  }, []);
 
   const startListening = useCallback(() => {
-    setTranscript('');
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.start();
-      } catch (err: any) {
-        console.warn('[VOICE] Speech recognition start notice:', err.message);
-      }
-    } else {
-      onError?.('Speech recognition is not supported in this browser. Please use Chrome or Edge, or type your question.');
-    }
+    onError?.('Direct microphone voice is powered by Agora Conversational AI Agent in the classroom panel.');
   }, [onError]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-    }
     setIsMicActive(false);
-    setVoiceState(prev => (prev === 'listening' ? 'idle' : prev));
+    setVoiceState('idle');
   }, []);
 
   const toggleListening = useCallback(() => {

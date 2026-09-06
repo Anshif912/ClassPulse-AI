@@ -1,32 +1,178 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
 import { dbService } from '../services/db.service';
+import { ragPipeline } from '../services/rag/ragPipeline';
 import { ragEngine } from '../services/rag/ragEngine';
+import { requireAuth, requireMembership, rateLimit } from '../middleware/auth.middleware';
 
 const router = Router();
 
-const chatRequestSchema = z.object({
-  sessionId: z.string().min(1, 'Session ID is required'),
-  message: z.string().min(1, 'Message cannot be empty'),
-  source: z.enum(['text', 'voice']).optional().default('text'),
-});
+// ─── POST /api/chat/classroom ─────────────────────────────────────────────────
+// Authenticated, class-membership-verified AI chat.
+// User identity comes from req.user (server-side session) — never from request body.
+// Conversations are private per user+class and stored in DB.
+router.post('/classroom',
+  requireAuth,
+  rateLimit(40, 60_000), // 40 messages per minute per IP
+  async (req: Request, res: Response): Promise<void> => {
+    const { classId, message, source = 'text' } = req.body as {
+      classId?: string;
+      message?: string;
+      source?: 'text' | 'voice';
+    };
 
-function processMessage(sessionId: string, message: string, source: 'text' | 'voice', res: Response): void {
+    if (!classId?.trim()) {
+      res.status(400).json({ error: 'classId is required.' });
+      return;
+    }
+    if (!message?.trim()) {
+      res.status(400).json({ error: 'message is required.' });
+      return;
+    }
+
+    const upperClassId = classId.trim().toUpperCase();
+    const classroom = dbService.getClassroom(upperClassId);
+
+    if (!classroom) {
+      res.status(404).json({ error: `Classroom "${upperClassId}" not found.` });
+      return;
+    }
+
+    // Verify membership server-side — user identity from session, not body
+    const membership = dbService.getMembership(upperClassId, req.user!.id);
+    if (!membership || membership.status !== 'active') {
+      res.status(403).json({ error: 'You are not a member of this classroom.' });
+      return;
+    }
+
+    try {
+      // Get or create private conversation for this user+class pair
+      const conversation = dbService.getOrCreateConversation(upperClassId, req.user!.id);
+
+      const recentStudentQuestions = dbService
+        .getConversationHistory(conversation.id)
+        .filter((m) => m.role === 'student')
+        .slice(-5)
+        .map((m) => m.content);
+
+      // 1. Process via Course-Grounded RAG 2.0 Pipeline
+      const ragResult = await ragPipeline.query(
+        message.trim(),
+        upperClassId,
+        recentStudentQuestions
+      );
+
+      const now = new Date().toISOString();
+
+      // Persist both sides of the conversation in DB
+      dbService.addAIMessage(conversation.id, {
+        role: 'student',
+        content: message.trim(),
+        topic: ragResult.topic,
+      });
+
+      dbService.addAIMessage(conversation.id, {
+        role: 'companion',
+        content: ragResult.answerText,
+        topic: ragResult.topic,
+      });
+
+      console.log(`[AI_REQUEST] user=${req.user!.email} class=${upperClassId} lang=${ragResult.detectedLanguage} evidence=${ragResult.evidenceState}`);
+
+      // Response matches the ChatMessage type the frontend expects
+      res.json({
+        message: {
+          id: `msg_${Date.now()}_companion`,
+          sessionId: conversation.id,
+          role: 'companion',
+          content: ragResult.answerText,
+          timestamp: now,
+          intent: 'educational',
+          evidenceState: ragResult.evidenceState,
+          sources: ragResult.sources,
+          ragContext: ragResult.topic
+            ? {
+                topic: ragResult.topic,
+                relevanceScore: ragResult.evidenceState === 'STRONG_EVIDENCE' ? 0.95 : 0.4,
+              }
+            : undefined,
+        },
+        spokenText: ragResult.spokenText || ragResult.answerText,
+        detectedLanguage: ragResult.detectedLanguage,
+        voiceLocale: ragResult.detectedLanguage === 'ta' || ragResult.detectedLanguage === 'tanglish' ? 'ta-IN' : ragResult.detectedLanguage === 'hi' ? 'hi-IN' : 'en-US',
+        isEducational: ragResult.isEducational,
+        evidenceState: ragResult.evidenceState,
+        sources: ragResult.sources,
+        diagnostics: ragResult.diagnostics,
+      });
+    } catch (err: any) {
+      console.error(`[AI_ERROR] user=${req.user!.email} class=${upperClassId}`, err.message);
+      res.status(500).json({ error: 'AI assistant encountered an error. Please try again.' });
+    }
+  }
+);
+
+// ─── GET /api/chat/classroom/:classId/history ─────────────────────────────────
+// Returns the authenticated user's private AI conversation history for a class.
+// Strictly isolated — each user only sees their own conversation.
+router.get('/classroom/:classId/history',
+  requireAuth,
+  (req: Request, res: Response): void => {
+    const upperClassId = req.params.classId.toUpperCase();
+
+    const membership = dbService.getMembership(upperClassId, req.user!.id);
+    if (!membership || membership.status !== 'active') {
+      res.status(403).json({ error: 'You are not a member of this classroom.' });
+      return;
+    }
+
+    const conversation = dbService.getOrCreateConversation(upperClassId, req.user!.id);
+    const history = dbService.getConversationHistory(conversation.id);
+
+    res.json({
+      conversationId: conversation.id,
+      classId: upperClassId,
+      userId: req.user!.id,   // confirm isolation: only user's own conversation
+      messages: history.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+        topic: m.topic,
+      })),
+    });
+  }
+);
+
+// ─── Legacy POST /api/chat ────────────────────────────────────────────────────
+// Preserved for backward compatibility with the legacy companion flow.
+// Does NOT require auth (legacy sessions are identified by sessionId).
+router.post('/', async (req: Request, res: Response): Promise<void> => {
+  const { sessionId, message, source = 'text' } = req.body as {
+    sessionId?: string;
+    message?: string;
+    source?: 'text' | 'voice';
+  };
+
+  if (!sessionId?.trim() || !message?.trim()) {
+    res.status(400).json({ error: 'sessionId and message are required.' });
+    return;
+  }
+
   const session = dbService.getSession(sessionId);
   if (!session) {
-    res.status(404).json({ error: `Session "${sessionId}" not found. Please join a valid class session.` });
+    res.status(404).json({ error: `Session "${sessionId}" not found.` });
     return;
   }
 
   try {
-    const ragResult = ragEngine.processQuery(message, session);
-
+    const ragResult = ragEngine.processQuery(message.trim(), session);
     const now = new Date().toISOString();
+
     const studentMsg = {
       id: `msg_${Date.now()}_student`,
       sessionId,
       role: 'student' as const,
-      content: message,
+      content: message.trim(),
       timestamp: now,
     };
 
@@ -37,58 +183,29 @@ function processMessage(sessionId: string, message: string, source: 'text' | 'vo
       content: ragResult.answerText,
       timestamp: now,
       intent: ragResult.intent,
-      ragContext: ragResult.topic ? {
-        topic: ragResult.topic,
-        chapter: ragResult.chapter || '',
-        relevanceScore: ragResult.relevanceScore || 1.0,
-        matchedKeywords: ragResult.matchedKeywords || [],
-      } : undefined,
+      ragContext: ragResult.topic
+        ? {
+            topic: ragResult.topic,
+            chapter: ragResult.chapter || '',
+            relevanceScore: ragResult.relevanceScore || 0,
+            matchedKeywords: ragResult.matchedKeywords || [],
+          }
+        : undefined,
     };
 
     dbService.addMessage(sessionId, studentMsg);
     dbService.addMessage(sessionId, companionMsg);
 
-    if (ragResult.topic) {
-      dbService.updateSession(sessionId, { currentTopic: ragResult.topic });
-    }
-
     res.json({
       message: companionMsg,
-      spokenText: ragResult.spokenText,
+      spokenText: ragResult.spokenText || ragResult.answerText,
       isEducational: ragResult.isEducational,
       intent: ragResult.intent,
-      proactiveSuggestion: ragResult.proactiveSuggestion,
     });
   } catch (err: any) {
-    console.error('[CHAT ERROR]', err);
-    res.status(500).json({
-      error: 'An error occurred while analyzing your question. Please try rephrasing.',
-      details: err.message,
-    });
+    console.error('[CHAT_ERROR]', err.message);
+    res.status(500).json({ error: 'AI assistant encountered an error.' });
   }
-}
-
-// POST /api/chat
-router.post('/', (req: Request, res: Response): void => {
-  const parseResult = chatRequestSchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({ error: parseResult.error.errors[0].message });
-    return;
-  }
-
-  const { sessionId, message, source } = parseResult.data;
-  processMessage(sessionId, message, source, res);
-});
-
-// POST /api/voice/question
-router.post('/voice/question', (req: Request, res: Response): void => {
-  const { sessionId, recognizedText } = req.body;
-  if (!sessionId || !recognizedText) {
-    res.status(400).json({ error: 'sessionId and recognizedText are required' });
-    return;
-  }
-
-  processMessage(sessionId, recognizedText, 'voice', res);
 });
 
 export default router;

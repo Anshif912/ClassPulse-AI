@@ -1,242 +1,448 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, Video, ShieldCheck, PlayCircle, AlertCircle, HelpCircle, CheckCircle2, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Sparkles,
+  Play,
+  Video,
+  BookOpen,
+  Globe,
+  ArrowRight,
+  CheckCircle2,
+  Users,
+  Mic,
+  ShieldCheck,
+  Lock,
+  FileText,
+  MessageSquare,
+  Layers,
+  ChevronRight,
+  GraduationCap,
+  Volume2,
+  Cpu,
+} from 'lucide-react';
+import { Logo } from './common/Logo';
+import { Lightfall } from './effects/Lightfall';
+import { SpecularButton } from './effects/SpecularButton';
 
 interface LandingPageProps {
-  onJoinSession: (meetUrl: string, participantName: string) => Promise<void>;
-  onLaunchDemoMode: () => void;
-  isLoading: boolean;
+  onJoinSession?: (meetUrl: string, participantName: string) => Promise<void>;
+  onLaunchDemoMode?: () => void;
+  isLoading?: boolean;
   errorMessage?: string;
   successStatus?: string;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({
-  onJoinSession,
-  onLaunchDemoMode,
-  isLoading,
-  errorMessage,
-  successStatus,
-}) => {
-  const [meetUrl, setMeetUrl] = useState('');
-  const [participantName, setParticipantName] = useState('Jeevan');
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [showTroubleshoot, setShowTroubleshoot] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLocalError(null);
-
-    const trimmed = meetUrl.trim();
-    if (!trimmed) {
-      setLocalError('Invalid Google Meet link. Please paste the complete meeting URL (e.g. https://meet.google.com/abc-defg-hij).');
-      return;
-    }
-
-    try {
-      await onJoinSession(trimmed, participantName.trim() || 'Student');
-    } catch (err: any) {
-      setLocalError(
-        err.message || 'Invalid Google Meet link. Please paste the complete meeting URL.'
-      );
-    }
-  };
-
-  const fillExampleLink = () => {
-    setMeetUrl('https://meet.google.com/abc-defg-hij');
-    setLocalError(null);
-  };
+export const LandingPage: React.FC<LandingPageProps> = () => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-white flex flex-col justify-between selection:bg-blue-600 selection:text-white">
-      {/* Top Navigation */}
-      <header className="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between max-w-6xl mx-auto w-full">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
-            <Sparkles className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-[#050816] text-[#F8FAFC] flex flex-col selection:bg-blue-600/40 selection:text-blue-200 antialiased relative overflow-x-hidden">
+      {/* ── Interactive Lightfall WebGL Background (Reverted with Opacity 0.8) ──── */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-80">
+        <Lightfall
+          colors={['#38BDF8', '#6366F1', '#D946EF', '#22D3EE']}
+          backgroundColor="#050816"
+          speed={0.35}
+          streakCount={3}
+          streakWidth={1.2}
+          streakLength={1.4}
+          glow={1.2}
+          density={0.5}
+          twinkle={1}
+          zoom={3.2}
+          backgroundGlow={0.6}
+          opacity={0.8}
+          mouseInteraction={false}
+        />
+      </div>
+
+      {/* ── Top Navigation Bar ──────────────────────────────────────────────── */}
+      <header className="h-20 px-6 sm:px-12 max-w-7xl mx-auto w-full flex items-center justify-between z-30 relative border-b border-slate-800/40">
+        <div onClick={() => navigate('/')} className="cursor-pointer">
+          <Logo size="sm" showTagline={true} />
+        </div>
+
+        {/* Center Links */}
+        <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-slate-400">
+          <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
+          <a href="#features" className="hover:text-white transition-colors">Features</a>
+          <a href="#ai-tutor" className="hover:text-white transition-colors">AI Tutor</a>
+          <a href="#workflows" className="hover:text-white transition-colors">For Educators</a>
+          <a href="#trust" className="hover:text-white transition-colors">Privacy & Trust</a>
+        </nav>
+
+        {/* Right CTAs */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/login')}
+            className="text-xs font-bold text-slate-300 hover:text-white px-3.5 py-2 transition-colors cursor-pointer"
+          >
+            Sign In
+          </button>
+          <SpecularButton
+            size="sm"
+            radius={999}
+            tint="#2563EB"
+            tintOpacity={1}
+            lineColor="#93C5FD"
+            baseColor="#1D4ED8"
+            intensity={1.2}
+            onClick={() => navigate('/login')}
+          >
+            Get Started
+          </SpecularButton>
+        </div>
+      </header>
+
+      {/* ── Main Hero Section (UX Corrected: Clear Hierarchy + Real Product Window) ── */}
+      <main className="flex-1 max-w-7xl mx-auto px-6 sm:px-12 w-full flex flex-col justify-center py-10 lg:py-16 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+          {/* Left Column (45%): Value Proposition, Trust signals, Dominant CTA */}
+          <div className="lg:col-span-5 space-y-6">
+            {/* Level 1: Eyebrow Badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-950/60 border border-blue-500/30 text-blue-300 shadow-sm backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+              <span>Live Classroom + Private AI Tutor</span>
+            </div>
+
+            {/* Level 1: Clean 2-Line Headline */}
+            <div className="space-y-3">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-[1.15]">
+                The AI Classroom That{' '}
+                <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-fuchsia-400 bg-clip-text text-transparent">
+                  Actually Helps You Learn
+                </span>
+              </h1>
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-normal">
+                Attend live video lectures and ask doubts privately in <span className="text-white font-semibold">Tamil, English, or Hindi</span>. Get instant, voice-enabled answers strictly grounded in your teacher’s course materials without interrupting the class.
+              </p>
+            </div>
+
+            {/* Key Differentiators Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs text-slate-300">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Zero audio leak to classroom</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span>Grounded in lecture PDFs</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" />
+                <span>Private multi-turn AI voice</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>English • தமிழ் • Tanglish • Hindi</span>
+              </div>
+            </div>
+
+            {/* Level 3 & 4: Dominant Primary CTA + Subordinate Secondary CTA */}
+            <div className="flex flex-wrap items-center gap-3.5 pt-2">
+              <SpecularButton
+                size="lg"
+                radius={999}
+                tint="#2563EB"
+                tintOpacity={1}
+                lineColor="#93C5FD"
+                baseColor="#1D4ED8"
+                intensity={1.4}
+                onClick={() => navigate('/login')}
+              >
+                <span>Get Started Free</span>
+                <ArrowRight className="w-4 h-4" />
+              </SpecularButton>
+
+              <a
+                href="#how-it-works"
+                className="px-6 py-3.5 rounded-full text-xs sm:text-sm font-bold bg-slate-900/80 hover:bg-slate-800 border border-slate-700/70 text-slate-300 hover:text-white transition-all active:scale-95 flex items-center gap-2 backdrop-blur-sm cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 text-slate-400 fill-slate-400" />
+                <span>See How It Works</span>
+              </a>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
-              CLASS PULSE AI
-            </h1>
-            <p className="text-xs text-slate-400 font-medium">Your AI Classroom Companion</p>
+
+          {/* Right Column (55%): Realistic ClassPulse Product Experience Window */}
+          <div className="lg:col-span-7 relative group">
+            {/* Ambient Background Glow behind Mockup */}
+            <div className="absolute -inset-1.5 bg-gradient-to-tr from-blue-600/30 via-purple-600/25 to-cyan-500/20 rounded-3xl blur-2xl opacity-70 group-hover:opacity-90 transition-opacity pointer-events-none" />
+
+            {/* Window Outer Shell */}
+            <div className="relative rounded-3xl p-1 bg-gradient-to-b from-[#1E294B] via-[#111827] to-[#0B0F1A] border border-[#2B3B66]/80 shadow-2xl shadow-blue-950/80 overflow-hidden backdrop-blur-xl transition-all duration-300 group-hover:border-blue-500/50">
+              {/* Product Mockup Image */}
+              <div className="relative rounded-[22px] overflow-hidden bg-[#060914] aspect-[16/10] sm:aspect-[16/9.8] flex items-center justify-center">
+                <img
+                  src="/assets/classpulse-product-preview.jpg"
+                  alt="ClassPulse Live Classroom with Private AI Tutor and Course-Grounded Notes"
+                  className="w-full h-full object-cover object-center transform transition-transform duration-700 group-hover:scale-[1.01]"
+                  loading="eager"
+                />
+
+                {/* Subtle depth lighting overlay */}
+                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-[22px] pointer-events-none" />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Demo Mode Trigger */}
-        <button
-          onClick={onLaunchDemoMode}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-950/60 text-blue-300 border border-blue-800/60 hover:bg-blue-900/60 hover:border-blue-700 transition-all shadow-sm"
-        >
-          <PlayCircle className="w-4 h-4 text-blue-400" />
-          <span>Launch Demo Mode (Zero Credentials)</span>
-        </button>
-      </header>
-
-      {/* Main Join Container */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-xl text-center space-y-8">
-          {/* Hero Titles */}
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              Live Classroom Companion
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-              CLASS PULSE AI
-            </h2>
-            <p className="text-base text-slate-300 font-normal max-w-md mx-auto">
-              Join your live class with your AI learning companion.
+        {/* ── Section 1: How ClassPulse Works (Simple 3-Step Visual UX) ─────────── */}
+        <div className="mt-20 pt-12 border-t border-slate-800/60" id="how-it-works">
+          <div className="text-center max-w-2xl mx-auto space-y-2 mb-12">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Simple Workflow</span>
+            <h2 className="text-2xl sm:text-3xl font-black text-white">How ClassPulse Works</h2>
+            <p className="text-xs sm:text-sm text-slate-400">
+              Transforming live lectures into interactive, doubt-free learning sessions in 3 simple steps.
             </p>
           </div>
 
-          {/* Join Form Card */}
-          <div className="p-6 sm:p-8 bg-slate-900/90 border border-slate-800 rounded-3xl shadow-2xl backdrop-blur text-left space-y-5">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Meet URL Input */}
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-                  Google Meet Link
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Video className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    value={meetUrl}
-                    onChange={(e) => {
-                      setMeetUrl(e.target.value);
-                      if (localError) setLocalError(null);
-                    }}
-                    placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                    disabled={isLoading}
-                    className="w-full pl-10 pr-24 py-3.5 bg-slate-950/80 border border-slate-700/80 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={fillExampleLink}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 text-[11px] font-medium text-slate-400 hover:text-slate-200 bg-slate-800/80 hover:bg-slate-700 rounded-lg transition-colors"
-                  >
-                    Paste sample
-                  </button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Step 1 */}
+            <div className="p-6 rounded-3xl bg-[#0B1021] border border-[#16203D] hover:border-[#2563EB]/50 transition-all space-y-4 relative group">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-black text-blue-500 font-mono">01</span>
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <Video className="w-5 h-5" />
                 </div>
               </div>
-
-              {/* Student Name Input */}
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-                  Your Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={participantName}
-                  onChange={(e) => setParticipantName(e.target.value)}
-                  placeholder="e.g. Jeevan"
-                  disabled={isLoading}
-                  className="w-full px-4 py-3 bg-slate-950/80 border border-slate-700/80 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              {/* Success Status Message */}
-              {successStatus && (
-                <div className="p-3.5 bg-emerald-950/40 border border-emerald-800/60 rounded-2xl flex items-start gap-2.5 text-xs text-emerald-300 animate-fadeIn">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>{successStatus}</span>
-                </div>
-              )}
-
-              {/* Error Message Display */}
-              {(localError || errorMessage) && (
-                <div className="p-3.5 bg-rose-950/40 border border-rose-800/60 rounded-2xl flex items-start gap-2.5 text-xs text-rose-300 animate-fadeIn">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <span>{localError || errorMessage}</span>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-4 px-6 rounded-2xl font-bold text-sm tracking-wide bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Connecting Companion...
-                  </span>
-                ) : (
-                  <>
-                    <span>JOIN CLASSROOM WITH AI</span>
-                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Honest Architectural Clarification */}
-            <div className="pt-2 border-t border-slate-800/60 text-center space-y-2">
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 inline mr-1 -mt-0.5" />
-                Your real Google Meet opens in a new tab. ClassPulse runs alongside it in this tab as your AI study companion.
+              <h3 className="text-base font-bold text-white">Teacher Starts the Class</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Instructors launch real-time video classrooms and attach PDF lecture notes, textbook chapters, and syllabus materials in one click.
               </p>
+            </div>
 
-              {/* Troubleshooting Toggle */}
-              <button
-                type="button"
-                onClick={() => setShowTroubleshoot(!showTroubleshoot)}
-                className="text-[11px] text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1 transition-colors"
-              >
-                <HelpCircle className="w-3 h-3" />
-                <span>Seeing "You can't join this video call" on Google Meet?</span>
-              </button>
-
-              {/* Google Meet Troubleshooting Guidance (Item 8) */}
-              {showTroubleshoot && (
-                <div className="p-3.5 bg-slate-950/90 border border-slate-700/60 rounded-2xl text-left text-xs text-slate-300 space-y-2 animate-fadeIn">
-                  <div className="font-bold text-slate-200 flex items-center gap-1.5 text-blue-400">
-                    <Info className="w-3.5 h-3.5" />
-                    <span>Google Meet Account & Permission Guide:</span>
-                  </div>
-                  <ul className="text-[11px] text-slate-400 space-y-1.5 list-disc pl-4">
-                    <li>
-                      <strong>Check Active Google Account:</strong> Google Meet requires you to be logged into the Google Account that was invited or created the meeting. In the Meet tab, switch to the right profile if you have multiple accounts.
-                    </li>
-                    <li>
-                      <strong>Host Admission:</strong> If the meeting is outside your organization, the meeting host must click "Admit" to let you in.
-                    </li>
-                    <li>
-                      <strong>ClassPulse Integrity:</strong> ClassPulse passes your exact Google Meet URL to Google's official website without modification, proxying, or iframe tampering.
-                    </li>
-                  </ul>
+            {/* Step 2 */}
+            <div className="p-6 rounded-3xl bg-[#0B1021] border border-[#16203D] hover:border-purple-500/50 transition-all space-y-4 relative group">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-black text-purple-500 font-mono">02</span>
+                <div className="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <Mic className="w-5 h-5" />
                 </div>
-              )}
+              </div>
+              <h3 className="text-base font-bold text-white">Students Ask Private Doubts</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Students activate their dedicated private microphone to ask questions aloud in English, Tamil, or Hindi without interrupting the live lecture.
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="p-6 rounded-3xl bg-[#0B1021] border border-[#16203D] hover:border-cyan-500/50 transition-all space-y-4 relative group">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-black text-cyan-500 font-mono">03</span>
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+              </div>
+              <h3 className="text-base font-bold text-white">AI Answers with Exact Citations</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                ClassPulse AI synthesizes clear answers strictly anchored in the teacher’s uploaded PDFs with verified page citations and spoken audio playback.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 2: Core Platform Capabilities (Features) ────────────────── */}
+        <div className="mt-20 pt-12 border-t border-slate-800/60" id="features">
+          <div className="text-center max-w-2xl mx-auto space-y-2 mb-12">
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Product Capabilities</span>
+            <h2 className="text-2xl sm:text-3xl font-black text-white">Engineered for deep comprehension</h2>
+            <p className="text-xs sm:text-sm text-slate-400">
+              No generic chatbot hallucination. Everything is verified against your actual syllabus.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-5 rounded-2xl bg-[#080D1E] border border-[#151D38] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <Video className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-bold text-white">Live Classroom RTC</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Ultra-low latency HD audio/video built on Agora RTC with stage resizing and screen sharing.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#080D1E] border border-[#151D38] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                <Lock className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-bold text-white">Zero Audio Leakage</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Private AI mic stream is strictly local and never published to the classroom broadcast channel.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#080D1E] border border-[#151D38] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-bold text-white">Course-Grounded RAG</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Strict semantic retrieval anchored in teacher-provided PDFs with exact page number citations.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#080D1E] border border-[#151D38] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <Globe className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-bold text-white">Multilingual Voice</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Full conversational voice support for English, Tamil (தமிழ்), Tanglish, and Hindi learners.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 3: Teacher vs Student Experience Tabs ───────────────────── */}
+        <div className="mt-20 pt-12 border-t border-slate-800/60" id="workflows">
+          <div className="text-center max-w-2xl mx-auto space-y-2 mb-8">
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Role-Tailored UX</span>
+            <h2 className="text-2xl sm:text-3xl font-black text-white">Designed for both sides of the classroom</h2>
+          </div>
+
+          <div className="flex justify-center mb-8">
+            <div className="p-1 bg-[#0E152E] border border-[#1E294B] rounded-2xl flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('student')}
+                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'student'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                For Students
+              </button>
+              <button
+                onClick={() => setActiveTab('teacher')}
+                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'teacher'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                For Teachers
+              </button>
             </div>
           </div>
 
-          {/* 4-Step User Journey Guide */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-left">
-            <div className="p-3 bg-slate-900/40 border border-slate-800/60 rounded-2xl">
-              <span className="text-blue-400 font-bold text-xs block mb-1">Step 1</span>
-              <p className="text-xs text-slate-300">Paste your Google Meet link</p>
+          <div className="max-w-4xl mx-auto p-8 rounded-3xl bg-[#0B1021] border border-[#182346] shadow-xl">
+            {activeTab === 'student' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                <div className="space-y-4">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                    DARK IMMERSIVE LEARNING WORKSPACE
+                  </span>
+                  <h3 className="text-xl font-bold text-white">Ask anything without fear of judgment</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Never fall behind in complex lectures. When you miss a concept, talk to your private AI companion in your native language. It explains step-by-step using your teacher's exact syllabus.
+                  </p>
+                  <ul className="space-y-2 text-xs text-slate-300">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>One-tap classroom join via 8-character code</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Personal doubt history and downloadable notes</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="p-5 rounded-2xl bg-[#060914] border border-[#16203D] space-y-3 text-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="font-bold text-slate-200">Your Private Doubt Session</span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Encrypted</span>
+                  </div>
+                  <p className="text-slate-400">Student: "Can you explain vacuum tubes simply?"</p>
+                  <p className="text-purple-300 font-medium">AI: "Think of vacuum tubes like early light-bulb switches that controlled electric current in first-gen computers (Page 2)."</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                <div className="space-y-4">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                    LIGHT PRODUCTIVITY TEACHING WORKSPACE
+                  </span>
+                  <h3 className="text-xl font-bold text-white">Teach uninterrupted while AI assists every student</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Focus on lecturing without stopping every two minutes for basic clarification questions. ClassPulse AI handles routine student doubts grounded strictly in the PDF materials you provide.
+                  </p>
+                  <ul className="space-y-2 text-xs text-slate-300">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                      <span>One-click PDF chunking & vector indexing</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                      <span>Zero classroom audio interference</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="p-5 rounded-2xl bg-[#060914] border border-[#16203D] space-y-3 text-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="font-bold text-slate-200">Teacher Material Ingestion</span>
+                    <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">AI Ready</span>
+                  </div>
+                  <p className="text-slate-300 font-semibold">Evolution_of_Computers.pdf</p>
+                  <p className="text-slate-400">12 pages • 48 semantic chunks indexed and verified for classroom retrieval.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Section 4: Privacy, Trust & Compliance ───────────────────────────── */}
+        <div className="mt-20 pt-12 border-t border-slate-800/60" id="trust">
+          <div className="p-8 rounded-3xl bg-gradient-to-b from-[#0B1021] to-[#070B18] border border-[#16203D] text-center space-y-4 max-w-4xl mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto">
+              <ShieldCheck className="w-6 h-6" />
             </div>
-            <div className="p-3 bg-slate-900/40 border border-slate-800/60 rounded-2xl">
-              <span className="text-blue-400 font-bold text-xs block mb-1">Step 2</span>
-              <p className="text-xs text-slate-300">Join your live class in new tab</p>
+            <h3 className="text-xl font-bold text-white">Trust, Isolation & Privacy by Design</h3>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
+              We never train public models on your proprietary lecture materials. All student doubt queries and classroom streams are encrypted in transit and isolated per session.
+            </p>
+            <div className="flex flex-wrap justify-center gap-6 pt-2 text-xs text-slate-300 font-medium">
+              <span className="flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-emerald-400" /> Local Audio Separation</span>
+              <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-blue-400" /> Strict PDF Sourced Citations</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-purple-400" /> Role-Based Access Control</span>
             </div>
-            <div className="p-3 bg-slate-900/40 border border-slate-800/60 rounded-2xl">
-              <span className="text-blue-400 font-bold text-xs block mb-1">Step 3</span>
-              <p className="text-xs text-slate-300">ClassPulse becomes your learning companion</p>
-            </div>
-            <div className="p-3 bg-slate-900/40 border border-slate-800/60 rounded-2xl">
-              <span className="text-blue-400 font-bold text-xs block mb-1">Step 4</span>
-              <p className="text-xs text-slate-300">Ask doubts anytime via text or voice</p>
-            </div>
+          </div>
+        </div>
+
+        {/* ── Section 5: Bottom Final CTA ─────────────────────────────────────── */}
+        <div className="mt-20 text-center space-y-6 py-8">
+          <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+            Ready to experience the future of live learning?
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
+            Join ClassPulse today to deliver interactive video classes with private multilingual AI assistance.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <SpecularButton
+              size="lg"
+              radius={999}
+              tint="#2563EB"
+              tintOpacity={1}
+              lineColor="#93C5FD"
+              baseColor="#1D4ED8"
+              intensity={1.4}
+              onClick={() => navigate('/login')}
+            >
+              <span>Get Started Free</span>
+              <ArrowRight className="w-4 h-4" />
+            </SpecularButton>
           </div>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-4 border-t border-slate-800/60 text-center text-xs text-slate-500">
-        ClassPulse AI — Honest, Zero-Disruption Live Classroom Companion Architecture
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer className="py-8 border-t border-slate-900 bg-[#04060E] text-center text-xs text-slate-500 z-10 relative space-y-2">
+        <p>ClassPulse — The AI Classroom That Actually Helps You Learn</p>
+        <p className="text-[11px] text-slate-600">
+          Learn Together. Go Further. • English • தமிழ் • Tanglish • Hindi
+        </p>
       </footer>
     </div>
   );

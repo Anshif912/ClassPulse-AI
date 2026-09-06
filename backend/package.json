@@ -7,15 +7,27 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "tunnel": "node scripts/start-tunnel.js",
     "test": "node --test dist/test/index.test.js"
   },
   "dependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/multer": "^2.2.0",
+    "@types/pdf-parse": "^1.1.5",
+    "agora-agents": "^2.7.0",
+    "agora-token": "^2.0.6",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "google-auth-library": "^11.0.2",
+    "helmet": "^8.3.0",
+    "multer": "^2.3.0",
+    "pdf-parse": "^2.4.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@ngrok/ngrok": "^1.7.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^22.13.5",

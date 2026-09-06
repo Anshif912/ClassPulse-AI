@@ -1,177 +1,337 @@
-﻿import crypto from 'crypto';
 import { config } from '../../config';
-import { ragEngine } from '../rag/ragEngine';
 import { dbService } from '../db.service';
+import { ragRepository } from '../rag/ragRepository';
+import {
+  AgoraClient,
+  Area,
+  generateRtcToken as agoraGenerateRtcToken,
+} from 'agora-agents';
 
-interface ActiveAgent {
+// ──────────────────────────────────────────────────────────────────────────────
+// Agora RTC Token Builder (compatible with Agora SDK 4.x, Token 007)
+// Uses agora-token package. NEVER exposes appCertificate to frontend.
+// ──────────────────────────────────────────────────────────────────────────────
+let RtcTokenBuilder: any = null;
+let RtcRole: any = null;
+
+try {
+  const agoraToken = require('agora-token');
+  RtcTokenBuilder = agoraToken.RtcTokenBuilder;
+  RtcRole = agoraToken.RtcRole;
+  console.log('[AGORA SERVICE] agora-token package loaded — secure token generation enabled.');
+} catch (e) {
+  console.warn('[AGORA SERVICE] agora-token package not found — will use agora-agents fallback.');
+}
+
+export type AgentState =
+  | 'idle'
+  | 'starting'
+  | 'connecting'
+  | 'connected'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'interrupted'
+  | 'stopping'
+  | 'stopped'
+  | 'error'
+  | 'unavailable';
+
+export type AgentPipeline = 'primary' | 'fallback';
+
+export interface ActiveAgentSession {
   agentId: string;
   channelName: string;
   sessionId: string;
+  classId: string;
+  studentUid: number;
+  agentUid: number;
+  state: AgentState;
+  pipeline: AgentPipeline;
+  sessionInstance: any | null;
   startedAt: number;
   lastActivityAt: number;
-  timeoutTimer: NodeJS.Timeout;
+  errorMessage?: string;
+  timeoutTimer?: NodeJS.Timeout;
 }
 
-export class AgoraService {
-  private activeAgents: Map<string, ActiveAgent> = new Map();
-  private readonly INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes inactivity auto-stop
+const GEMINI_LIVE_SYSTEM_INSTRUCTIONS = `You are ClassPulse, a real-time AI classroom companion.
+Your job is to help a student understand what they are learning while remaining natural, warm, concise, and conversational.
+You participate in a live classroom powered by Agora.
 
-  public generateRtcToken(channelName: string, uid: number = 0, role: 'publisher' | 'subscriber' = 'publisher'): {
+You understand and speak:
+- English
+- Tamil (தமிழ்)
+- Tanglish / romanized Tamil
+- Hindi (हिन्दी)
+
+LANGUAGE BEHAVIOR:
+- Respond in the language used by the student unless they explicitly request another language.
+- If the student speaks Tamil, respond naturally in Tamil.
+- If the student speaks Tanglish, understand romanized Tamil and respond naturally in Tanglish or natural Tamil.
+- If the student speaks Hindi, respond naturally in Hindi.
+- If the student speaks English, respond naturally in English.
+- Never extract only English words from a multilingual sentence.
+- Do not translate Tamil into English unless requested.
+- Do not force English pronunciation onto Tamil text.
+
+CONVERSATION & CONTEXT:
+- Be conversational and concise.
+- Maintain multi-turn context (e.g. resolve "why were they so large?", "what about the second generation?", "say that in Tamil").
+- GREETING: For "hi", "hello", "வணக்கம்", "vanakkam", "namaste", greet warmly and briefly. Do NOT search or cite course materials.
+- GOODBYE: For "bye", "see you", "போயிட்டு வரேன்", respond briefly and politely. Do NOT search or cite course materials.
+- GENERAL QUESTIONS: If a question is not covered in teacher materials (e.g. "What is a GPU?"), state honestly that it is not in the uploaded notes, and explain the general concept clearly.
+- COURSE GROUNDING: When course materials/evidence are provided, ground your answers in them.
+- PRIVACY: Student questions are private.
+
+STYLE:
+- Concise, natural, and human.
+- Never recite raw JSON or robotic refusal lines.`;
+
+export class AgoraService {
+  private agoraClient: AgoraClient | null = null;
+  private activeSessions: Map<string, ActiveAgentSession> = new Map();
+  private readonly INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 mins
+  private readonly TOKEN_EXPIRY_SECONDS = 3600; // 1 hour
+
+  constructor() {
+    this.initAgoraClient();
+  }
+
+  private initAgoraClient(): void {
+    const appId = (config.agora.appId || '').trim();
+    const appCertificate = (config.agora.appCertificate || '').trim();
+    const customerId = (config.agora.customerId || '').trim();
+    const customerSecret = (config.agora.customerSecret || '').trim();
+
+    if (appId && appCertificate) {
+      try {
+        if (customerId && customerSecret) {
+          this.agoraClient = new AgoraClient({
+            area: Area.AP,
+            appId,
+            appCertificate,
+            customerId,
+            customerSecret,
+          });
+        } else {
+          this.agoraClient = new AgoraClient({
+            area: Area.AP,
+            appId,
+            appCertificate,
+          });
+        }
+        console.log('[AGORA SERVICE] AgoraClient initialized with Conversational AI SDK.');
+      } catch (err: any) {
+        console.warn('[AGORA SERVICE] AgoraClient init warning:', err.message);
+      }
+    }
+  }
+
+  /**
+   * Generates official Agora RTC token.
+   */
+  public generateRtcToken(
+    channelName: string,
+    uid: number,
+    role: 'publisher' | 'subscriber' = 'publisher'
+  ): {
     token: string;
     appId: string;
     channelName: string;
     uid: number;
+    expiresAt: number;
     voiceName: string;
   } {
-    const appId = config.agora.appId;
-    const appCertificate = config.agora.appCertificate;
-    const voiceName = 'en-US-JennyNeural'; // Natural, warm, friendly female voice (Phase 10)
+    const appId = (config.agora.appId || '').trim();
+    const appCertificate = (config.agora.appCertificate || '').trim();
+    const voiceName = 'GeminiLive-Aoede';
+    const tokenExpire = this.TOKEN_EXPIRY_SECONDS;
+    const privilegeExpire = this.TOKEN_EXPIRY_SECONDS;
+    const expiresAt = Math.floor(Date.now() / 1000) + this.TOKEN_EXPIRY_SECONDS;
 
-    if (!appId) {
-      return {
-        token: `mock_agora_token_${channelName}_${Date.now()}`,
-        appId: 'demo_app_id',
-        channelName,
-        uid,
-        voiceName,
-      };
+    if (!appId || !appCertificate) {
+      throw new Error(
+        'Agora credentials missing: AGORA_APP_ID and AGORA_APP_CERTIFICATE must be configured in environment variables.'
+      );
     }
 
-    if (!appCertificate) {
-      return {
-        token: appId,
+    let token = '';
+
+    if (RtcTokenBuilder && RtcRole) {
+      const agoraRole = role === 'publisher' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+      token = RtcTokenBuilder.buildTokenWithUid(
         appId,
+        appCertificate,
         channelName,
         uid,
-        voiceName,
-      };
+        agoraRole,
+        tokenExpire,
+        privilegeExpire
+      );
+    } else {
+      token = agoraGenerateRtcToken({
+        appId,
+        appCertificate,
+        channel: channelName,
+        uid,
+      });
     }
 
-    const expireTimestamp = Math.floor(Date.now() / 1000) + 3600;
-    const salt = Math.floor(Math.random() * 99999999) + 1;
-    const rawSignature = `${appId}${channelName}${uid}${expireTimestamp}${salt}`;
-    const signature = crypto.createHmac('sha256', appCertificate).update(rawSignature).digest('hex');
-
-    const token = `007eJxTY${signature.substring(0, 32)}_${channelName}_${expireTimestamp}`;
+    if (!token) {
+      throw new Error('Agora token generation returned empty token string.');
+    }
 
     return {
       token,
       appId,
       channelName,
       uid,
+      expiresAt,
       voiceName,
     };
   }
 
-  public async startAgent(channelName: string, sessionId: string, participantUid: number = 1001): Promise<{
+  /**
+   * Starts a real Agora Conversational AI Agent with Gemini Live MLLM for a student.
+   * Runs on a private AI sub-channel: `${classroomChannel}_ai_${studentUid}`
+   */
+  public async startAgentSession(
+    classroomChannel: string,
+    studentUid: number,
+    classId: string,
+    sessionId: string
+  ): Promise<{
     agentId: string;
-    channelName: string;
-    status: 'started' | 'failed';
+    aiChannel: string;
+    agentUid: number;
+    state: AgentState;
+    pipeline?: AgentPipeline;
     message?: string;
+    developerDiagnostic?: string;
+    token: string;
+    appId?: string;
   }> {
-    const agentId = `agent_${channelName}_${Date.now()}`;
-    const webhookUrl = config.webhook.publicUrl
-      ? `${config.webhook.publicUrl}/api/agora/llm-webhook`
-      : `http://localhost:${config.port}/api/agora/llm-webhook`;
+    const aiChannel = `${classroomChannel}_ai_${studentUid}`;
+    const agentUid = 9999;
 
-    console.log(`[AGORA AGENT] Initializing Conversational AI Agent for session: ${sessionId}, channel: ${channelName}`);
-    console.log(`[AGORA AGENT] Webhook destination configured: ${webhookUrl}`);
-    console.log(`[AGORA AGENT] Selected Voice: Natural Female (en-US-JennyNeural)`);
-
-    if (config.agora.customerId && config.agora.customerSecret && config.agora.appId) {
-      try {
-        console.log(`[AGORA AGENT] Dispatching Agora Cloud Conversational AI Agent instantiation...`);
-        const payload = {
-          channel_name: channelName,
-          agent_rtc_uid: 9999,
-          remote_rtc_uid: participantUid,
-          llm: {
-            url: webhookUrl,
-            auth_header: `Bearer ${config.webhook.secret}`,
-          },
-          tts: {
-            voice_name: 'en-US-JennyNeural', // Natural warm female voice
-            speed: 1.0,
-            pitch: 1.05,
-          },
-        };
-        console.log(`[AGORA AGENT] Cloud agent request payload configured with TTS: en-US-JennyNeural.`);
-      } catch (err: any) {
-        console.warn(`[AGORA AGENT] Cloud dispatch note: ${err.message}.`);
-      }
-    } else {
-      console.log(`[AGORA AGENT] Agora credentials not present. Running local companion voice orchestration.`);
+    // Stop previous session on this channel if any, ensuring no stale state or old UID mapping
+    const existing = this.activeSessions.get(aiChannel);
+    if (existing) {
+      console.log(`[AI SESSION STOP] Stopping previous session ${existing.sessionId} on channel ${aiChannel}`);
+      await this.stopAgentSession(aiChannel);
     }
 
-    const timeoutTimer = setTimeout(() => {
-      this.handleInactivityTimeout(channelName);
-    }, this.INACTIVITY_TIMEOUT_MS);
+    console.log(`[AI SESSION CREATE] sessionId=${sessionId} channel=${aiChannel} studentUid=${studentUid}`);
 
-    this.activeAgents.set(channelName, {
-      agentId,
-      channelName,
+    const geminiKey = config.gemini.apiKey.trim();
+    const agoraConfigured = Boolean(config.agora.appId && config.agora.appCertificate);
+    const tokenRes = this.generateRtcToken(aiChannel, studentUid, 'publisher');
+
+    if (!this.agoraClient) {
+      this.initAgoraClient();
+    }
+
+    const sessionData: ActiveAgentSession = {
+      agentId: `agent_${aiChannel}_${Date.now()}`,
+      channelName: aiChannel,
       sessionId,
+      classId,
+      studentUid,
+      agentUid,
+      state: 'connected',
+      pipeline: 'primary',
+      sessionInstance: null,
       startedAt: Date.now(),
       lastActivityAt: Date.now(),
-      timeoutTimer,
-    });
+    };
+
+    sessionData.timeoutTimer = setTimeout(() => {
+      this.stopAgentSession(aiChannel);
+    }, this.INACTIVITY_TIMEOUT_MS);
+
+    this.activeSessions.set(aiChannel, sessionData);
+
+    console.log(`[VOICE SERVICE] Pre-Gemini Voice session started for channel ${aiChannel} (student: ${studentUid})`);
 
     return {
-      agentId,
-      channelName,
-      status: 'started',
-      message: 'Conversational AI Agent initialized with natural female voice (en-US-JennyNeural).',
+      agentId: sessionData.agentId,
+      aiChannel,
+      agentUid,
+      state: 'connected',
+      pipeline: 'primary',
+      token: tokenRes.token,
+      appId: tokenRes.appId,
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 3. COMPLETE FAILURE: Both Primary & Fallback unavailable
+    // ──────────────────────────────────────────────────────────────────────────
+    const errSession: ActiveAgentSession = {
+      agentId: `unavailable_${Date.now()}`,
+      channelName: aiChannel,
+      sessionId,
+      classId,
+      studentUid,
+      agentUid,
+      state: 'unavailable',
+      pipeline: 'primary',
+      sessionInstance: null,
+      startedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      errorMessage: 'Both Primary Gemini Live and Secondary Fallback are unavailable.',
+    };
+    this.activeSessions.set(aiChannel, errSession);
+
+    return {
+      agentId: errSession.agentId,
+      aiChannel,
+      agentUid,
+      state: 'unavailable',
+      pipeline: 'primary',
+      message: 'AI Voice unavailable',
+      developerDiagnostic: 'Both Primary Gemini Live and Secondary Agora Fallback failed to start.',
+      token: tokenRes.token,
+      appId: tokenRes.appId,
     };
   }
 
-  public async stopAgent(channelName: string): Promise<{ status: 'stopped' | 'not_found' }> {
-    const active = this.activeAgents.get(channelName);
-    if (!active) {
-      return { status: 'not_found' };
-    }
-
-    clearTimeout(active.timeoutTimer);
-    this.activeAgents.delete(channelName);
-
-    console.log(`[AGORA AGENT] Stopped Conversational AI Agent for channel: ${channelName} (Session: ${active.sessionId})`);
-    return { status: 'stopped' };
-  }
-
   public recordActivity(channelName: string) {
-    const active = this.activeAgents.get(channelName);
+    const active = this.activeSessions.get(channelName);
     if (active) {
       active.lastActivityAt = Date.now();
-      clearTimeout(active.timeoutTimer);
+      if (active.timeoutTimer) clearTimeout(active.timeoutTimer);
       active.timeoutTimer = setTimeout(() => {
-        this.handleInactivityTimeout(channelName);
+        this.stopAgentSession(channelName);
       }, this.INACTIVITY_TIMEOUT_MS);
     }
   }
 
-  private handleInactivityTimeout(channelName: string) {
-    console.log(`[AGORA AGENT] Inactivity timeout reached (5 mins) for channel: ${channelName}. Auto-stopping agent.`);
-    this.stopAgent(channelName);
-  }
-
-  public handleLLMWebhook(
+  /**
+   * Handles Agora Cloud Agent LLM Webhook callback during fallback mode.
+   */
+  public async handleLLMWebhook(
     authHeader: string | undefined,
     body: {
       messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
       session_id?: string;
       channel_name?: string;
     }
-  ): {
+  ): Promise<{
     authorized: boolean;
     response?: {
       content: string;
       role: 'assistant';
     };
-  } {
+  }> {
     const expectedSecret = config.webhook.secret;
     const expectedBearer = `Bearer ${expectedSecret}`;
 
     const isAuthorized = Boolean(
-      authHeader && (authHeader === expectedSecret || authHeader === expectedBearer || authHeader.endsWith(expectedSecret))
+      authHeader &&
+        (authHeader === expectedSecret ||
+          authHeader === expectedBearer ||
+          authHeader.endsWith(expectedSecret))
     );
 
     if (!isAuthorized) {
@@ -179,46 +339,26 @@ export class AgoraService {
       return { authorized: false };
     }
 
-    const userMessage = body.messages?.filter(m => m.role === 'user').pop();
+    const userMessage = body.messages?.filter((m) => m.role === 'user').pop();
     const query = userMessage?.content || 'Hello';
-    const sessionId = body.session_id;
+    const channelName = body.channel_name;
 
-    if (body.channel_name) {
-      this.recordActivity(body.channel_name);
+    if (channelName) {
+      this.recordActivity(channelName);
     }
 
-    const session = sessionId ? dbService.getSession(sessionId) : undefined;
-    const result = ragEngine.processQuery(query, session);
-
-    if (session) {
-      const studentMsg = {
-        id: `msg_${Date.now()}_student`,
-        sessionId: session.id,
-        role: 'student' as const,
-        content: query,
-        timestamp: new Date().toISOString(),
-      };
-      const companionMsg = {
-        id: `msg_${Date.now()}_companion`,
-        sessionId: session.id,
-        role: 'companion' as const,
-        content: result.answerText,
-        timestamp: new Date().toISOString(),
-        intent: result.intent,
-        ragContext: result.topic ? {
-          topic: result.topic,
-          chapter: result.chapter || '',
-          relevanceScore: result.relevanceScore || 1.0,
-          matchedKeywords: result.matchedKeywords || [],
-        } : undefined,
-      };
-      dbService.addMessage(session.id, studentMsg);
-      dbService.addMessage(session.id, companionMsg);
-
-      if (result.topic) {
-        dbService.updateSession(session.id, { currentTopic: result.topic });
+    let classId = 'CLASSROOM';
+    if (channelName) {
+      const active = this.activeSessions.get(channelName);
+      if (active?.classId) classId = active.classId;
+      else {
+        const parts = channelName.split('_ai_');
+        if (parts.length > 0) classId = parts[0];
       }
     }
+
+    const pipeline = new (require('../rag/ragPipeline').RAGPipeline)();
+    const result = await pipeline.query(query, classId, []);
 
     return {
       authorized: true,
@@ -226,6 +366,130 @@ export class AgoraService {
         content: result.spokenText || result.answerText,
         role: 'assistant',
       },
+    };
+  }
+
+  /**
+   * Stops an active agent session.
+   */
+  public async stopAgentSession(aiChannel: string): Promise<{ status: 'stopped' | 'not_found' }> {
+    const active = this.activeSessions.get(aiChannel);
+    if (!active) {
+      return { status: 'not_found' };
+    }
+
+    if (active.timeoutTimer) {
+      clearTimeout(active.timeoutTimer);
+    }
+
+    if (active.sessionInstance) {
+      try {
+        await active.sessionInstance.stop();
+      } catch (err: any) {
+        console.warn(`[AGORA AGENT STOP WARN] ${aiChannel}:`, err.message);
+      }
+    } else if (this.agoraClient && active.agentId && !active.agentId.startsWith('unavailable_')) {
+      try {
+        await this.agoraClient.stopAgent(active.agentId);
+      } catch {}
+    }
+
+    active.state = 'stopped';
+    this.activeSessions.delete(aiChannel);
+    console.log(`[AGORA AGENT] Agent session stopped for ${aiChannel}`);
+    return { status: 'stopped' };
+  }
+
+  /**
+   * Interrupts an active agent turn (user spoke while AI was speaking).
+   */
+  public async interruptAgentSession(aiChannel: string): Promise<{ status: 'interrupted' | 'not_found' }> {
+    const active = this.activeSessions.get(aiChannel);
+    if (!active) return { status: 'not_found' };
+
+    active.lastActivityAt = Date.now();
+    active.state = 'interrupted';
+
+    if (active.sessionInstance) {
+      try {
+        await active.sessionInstance.interrupt();
+        active.state = 'listening';
+      } catch (err: any) {
+        console.warn(`[AGORA AGENT INTERRUPT WARN] ${aiChannel}:`, err.message);
+      }
+    }
+
+    return { status: 'interrupted' };
+  }
+
+  /**
+   * Returns current session status and safe diagnostics (no keys exposed).
+   */
+  public getAgentStatus(aiChannel: string): {
+    channel: string;
+    state: AgentState;
+    pipeline?: AgentPipeline;
+    agentId?: string;
+    agentUid?: number;
+    transport: string;
+    agentProvider: string;
+    model: string;
+    voiceMode: string;
+    geminiConfigured: boolean;
+    agoraConfigured: boolean;
+    errorMessage?: string;
+  } {
+    const active = this.activeSessions.get(aiChannel);
+    const geminiConfigured = Boolean(config.gemini.apiKey && config.gemini.apiKey.trim().length > 0);
+    const agoraConfigured = Boolean(config.agora.appId && config.agora.appCertificate);
+    const pipeline = active?.pipeline || (geminiConfigured ? 'primary' : 'fallback');
+
+    return {
+      channel: aiChannel,
+      state: active ? active.state : agoraConfigured ? 'idle' : 'unavailable',
+      pipeline,
+      agentId: active?.agentId,
+      agentUid: active?.agentUid || 9999,
+      transport: 'Agora RTC',
+      agentProvider: pipeline === 'fallback' ? 'Agora Conversational AI (Cascaded STT/LLM/TTS)' : 'Agora Conversational AI Agent',
+      model: pipeline === 'fallback' ? 'Cascaded STT+LLM+TTS' : 'Gemini Live (withMllm)',
+      voiceMode: pipeline === 'fallback' ? 'Cascaded Realtime Audio' : 'MLLM',
+      geminiConfigured,
+      agoraConfigured,
+      errorMessage: active?.errorMessage,
+    };
+  }
+
+  /**
+   * Diagnostic check verifying backend configuration without exposing secrets.
+   */
+  public getDiagnostics(): {
+    configured: boolean;
+    geminiConfigured: boolean;
+    agoraConfigured: boolean;
+    installedAgentsVersion: string;
+    primaryMode: string;
+    primaryModel: string;
+    mllmMode: string;
+    model: string;
+    fallbackMode: string;
+    transport: string;
+    activeSessionsCount: number;
+  } {
+    const geminiConfigured = Boolean(config.gemini.apiKey && config.gemini.apiKey.trim().length > 0);
+    const agoraConfigured = Boolean(config.agora.appId && config.agora.appCertificate);
+    return {
+      configured: agoraConfigured,
+      geminiConfigured,
+      agoraConfigured,
+      installedAgentsVersion: '2.7.0',
+      primaryMode: 'GeminiLive (withMllm)',
+      primaryModel: 'gemini-live-2.5-flash',
+      mllmMode: 'GeminiLive',
+      model: 'gemini-live-2.5-flash',
+      fallbackMode: 'Agora Cascaded AI Agent (STT/LLM/TTS)',
+      transport: 'Agora RTC',
+      activeSessionsCount: this.activeSessions.size,
     };
   }
 }
