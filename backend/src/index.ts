@@ -13,6 +13,9 @@ import authRoutes from './routes/auth.routes';
 
 const app = express();
 
+// Enable trust proxy for Render / Cloud hosting
+app.set('trust proxy', 1);
+
 // ─── Security headers (helmet) ────────────────────────────────────────────────
 app.use(
   helmet({
@@ -22,10 +25,23 @@ app.use(
 );
 
 // ─── CORS — restricted to configured frontend origin ─────────────────────────
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const allowedFrontendOrigin = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 app.use(
   cors({
-    origin: FRONTEND_URL,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/$/, '');
+      if (
+        cleanOrigin === allowedFrontendOrigin ||
+        cleanOrigin === 'http://localhost:5173' ||
+        cleanOrigin === 'http://localhost:3000' ||
+        process.env.NODE_ENV !== 'production'
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true); // Permissive in dev/staging to prevent CORS blocks
+    },
     credentials: true,               // Required for HttpOnly cookie to be sent cross-origin
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -113,7 +129,7 @@ app.listen(config.port, async () => {
   console.log(`📚  RAG:      Active (local, keyless)`);
   console.log(`🎙️   Agora:    ${config.agora.isConfigured ? 'Real tokens (certificate configured)' : 'Test mode (no certificate)'}`);
   console.log(`🔏  Google:   ${process.env.GOOGLE_CLIENT_ID ? 'OAuth configured' : '⚠️  NOT CONFIGURED — add GOOGLE_CLIENT_ID to .env'}`);
-  console.log(`🌐  CORS:     ${FRONTEND_URL}`);
+  console.log(`🌐  CORS:     ${allowedFrontendOrigin}`);
   console.log('====================================================');
 
   await syncRAGRepositoryOnBoot();

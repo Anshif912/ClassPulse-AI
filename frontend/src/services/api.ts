@@ -10,7 +10,8 @@ import {
   ClassroomMaterialSummary,
 } from '../types';
 
-const API_BASE = '/api';
+const rawApiUrl = (import.meta as any).env?.VITE_API_URL || '';
+const API_BASE = rawApiUrl ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`) : '/api';
 
 export class ApiError extends Error {
   constructor(public message: string, public status?: number, public details?: any) {

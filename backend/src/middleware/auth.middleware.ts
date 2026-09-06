@@ -147,7 +147,7 @@ export function cookieOptions(secure: boolean) {
   return {
     httpOnly: true,
     secure,
-    sameSite: 'lax' as const,
+    sameSite: (secure ? 'none' : 'lax') as 'none' | 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   };
