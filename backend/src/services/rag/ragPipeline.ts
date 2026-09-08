@@ -13,6 +13,7 @@ import { FusionRanker } from './fusionRanker';
 import { CrossEncoderReranker } from './reranker';
 import { ContextCompressor } from './contextCompressor';
 import { ragRepository, IRAGRepository } from './ragRepository';
+import { RAGProviderFactory } from './providers/providerFactory';
 import { config } from '../../config';
 
 export class RAGPipeline {
@@ -122,7 +123,24 @@ export class RAGPipeline {
 
     if (evidenceState === 'NO_EVIDENCE') {
       // General concept explanation mode (not in materials, but explain concept honestly)
-      if (config.gemini.apiKey) {
+      const llmProvider = RAGProviderFactory.getLLMProvider();
+      const llmChoice = (process.env.RAG_LLM_PROVIDER || config.rag?.llmProvider || 'qwen').toLowerCase();
+
+      if (llmChoice === 'qwen' || llmChoice === 'qwen3') {
+        try {
+          const res = await llmProvider.generateAnswer(
+            transformation.originalQuery,
+            '',
+            {
+              systemPrompt: 'You are ClassPulse AI Tutor. If the question is outside teacher materials, state gently that it is not in the uploaded notes, then explain the general concept clearly and warmly in the user\'s language.',
+              language: transformation.detectedLanguage,
+            }
+          );
+          answerText = res.text;
+        } catch {
+          answerText = this.handleGeneralTutoring(transformation, startTime).answerText;
+        }
+      } else if (config.gemini.apiKey && llmChoice !== 'openai') {
         try {
           answerText = await this.generateGeminiResponse(
             'You are ClassPulse AI Tutor. If the question is outside teacher materials, state gently that it is not in the uploaded notes, then explain the general concept clearly and warmly in the user\'s language.',
@@ -130,7 +148,6 @@ export class RAGPipeline {
             transformation.originalQuery
           );
         } catch (err: any) {
-          console.warn('[RAG_PIPELINE] Gemini general knowledge generation error:', err.message);
           answerText = this.handleGeneralTutoring(transformation, startTime).answerText;
         }
       } else if (config.openai.apiKey && config.openai.apiKey.startsWith('sk-')) {
@@ -141,7 +158,6 @@ export class RAGPipeline {
             transformation.originalQuery
           );
         } catch (err: any) {
-          console.warn('[RAG_PIPELINE] OpenAI general knowledge generation error:', err.message);
           answerText = this.handleGeneralTutoring(transformation, startTime).answerText;
         }
       } else {
@@ -150,45 +166,68 @@ export class RAGPipeline {
     } else if (evidenceState === 'WEAK_EVIDENCE') {
       // Out of scope / weak evidence
       answerText = this.getWeakEvidenceMessage(transformation.detectedLanguage, selectedChunks);
-    } else if (config.gemini.apiKey) {
-      try {
-        answerText = await this.generateGeminiResponse(
-          systemPrompt,
-          contextText,
-          transformation.originalQuery
-        );
-      } catch (err: any) {
-        console.warn('[RAG_PIPELINE] Gemini grounded generation error, fallback to synthesis:', err.message);
-        answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
-      }
-    } else if (config.openai.apiKey && config.openai.apiKey.startsWith('sk-')) {
-      // Generate grounded answer strictly from compressed evidence via LLM
-      try {
-        answerText = await this.generateLLMResponse(
-          systemPrompt,
-          contextText,
-          transformation.originalQuery
-        );
-      } catch (err: any) {
-        console.warn('[RAG_PIPELINE] OpenAI grounded generation error, fallback to synthesis:', err.message);
-        answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
-      }
     } else {
-      // Grounded deterministic synthesis in student's language
-      answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
+      // STRONG_EVIDENCE
+      const llmChoice = (process.env.RAG_LLM_PROVIDER || config.rag?.llmProvider || 'qwen').toLowerCase();
+      const llmProvider = RAGProviderFactory.getLLMProvider();
+
+      if (llmChoice === 'qwen' || llmChoice === 'qwen3') {
+        try {
+          const res = await llmProvider.generateAnswer(
+            transformation.originalQuery,
+            contextText,
+            {
+              systemPrompt,
+              language: transformation.detectedLanguage,
+            }
+          );
+          if (res.text && !res.text.startsWith('Based on lecture notes:')) {
+            answerText = `${res.text}\n\n📘 ${(selectedChunks[0]?.metadata.title || 'Course Material').replace(/_/g, ' ')} · p.${selectedChunks[0]?.metadata.pageStart}`;
+          } else {
+            answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
+          }
+        } catch {
+          answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
+        }
+      } else if (llmChoice === 'gemini' && config.gemini.apiKey) {
+        try {
+          answerText = await this.generateGeminiResponse(
+            systemPrompt,
+            contextText,
+            transformation.originalQuery
+          );
+        } catch (err: any) {
+          console.warn('[RAG_PIPELINE] Gemini grounded generation error, fallback to synthesis:', err.message);
+          answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
+        }
+      } else if (llmChoice === 'openai' && config.openai.apiKey && config.openai.apiKey.startsWith('sk-')) {
+        try {
+          answerText = await this.generateLLMResponse(
+            systemPrompt,
+            contextText,
+            transformation.originalQuery
+          );
+        } catch (err: any) {
+          console.warn('[RAG_PIPELINE] OpenAI grounded generation error, fallback to synthesis:', err.message);
+          answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
+        }
+      } else {
+        answerText = this.generateGroundedSynthesis(selectedChunks, transformation);
+      }
     }
 
     metrics.llmGenerationMs = Date.now() - t6;
     metrics.totalMs = Date.now() - startTime;
 
     // ─── Diagnostics Trace ────────────────────────────────────────────────────
-    const embeddingInfo = EmbeddingService.getActiveConfigInfo();
+    const activeProviders = RAGProviderFactory.getActiveProvidersInfo();
     const diagnostics: RAGDiagnostics = {
       originalQuery: transformation.originalQuery,
       normalizedQuery: transformation.normalizedQuery,
       retrievalQuery: transformation.retrievalQuery,
       detectedLanguage: transformation.detectedLanguage,
-      embeddingProvider: embeddingInfo.isRealOpenAI ? 'OpenAI text-embedding-3-large' : 'ClassPulse Deterministic Vectorizer (Development/Test Mode)',
+      embeddingProvider: activeProviders.embedding.activeProvider,
+      embeddingModel: activeProviders.embedding.activeModel,
       bm25TopCandidates: lexicalCandidates.slice(0, 5).map((c) => ({
         chunkId: c.chunk.metadata.chunkId,
         page: c.chunk.metadata.pageStart,
@@ -208,6 +247,8 @@ export class RAGPipeline {
         chunkId: c.chunk.metadata.chunkId,
         page: c.chunk.metadata.pageStart,
       })),
+      rerankerProvider: activeProviders.reranker.activeProvider,
+      rerankerModel: activeProviders.reranker.activeModel,
       rerankScores: ranked.map((c) => ({
         chunkId: c.chunk.metadata.chunkId,
         page: c.chunk.metadata.pageStart,
@@ -222,6 +263,8 @@ export class RAGPipeline {
         text: c.text,
       })),
       evidenceState,
+      llmProvider: activeProviders.llm.activeProvider,
+      llmModel: activeProviders.llm.activeModel,
       latency: metrics,
     };
 

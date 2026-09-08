@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { IAgoraRTCRemoteUser, UID } from 'agora-rtc-sdk-ng';
-import { Monitor, Users } from 'lucide-react';
+import { Monitor, Users, Maximize2, Minimize2 } from 'lucide-react';
 import { RtcParticipant } from '../types';
 import { ParticipantTile } from './ParticipantTile';
 
@@ -14,6 +14,9 @@ interface ParticipantGridProps {
   screenTrack?: any;
   layoutMode?: 'grid' | 'speaker';
   className?: string;
+  canModerate?: boolean;
+  onMuteParticipant?: (userId: string) => void;
+  onStreamQualityChange?: (uid: UID, quality: 'high' | 'low') => void;
 }
 
 const FILMSTRIP_MAX = 8;
@@ -28,7 +31,12 @@ export function ParticipantGrid({
   screenTrack,
   layoutMode = 'grid',
   className = '',
+  canModerate = false,
+  onMuteParticipant,
+  onStreamQualityChange,
 }: ParticipantGridProps) {
+  const [pinnedUid, setPinnedUid] = useState<UID | null>(null);
+
   // Ordered participant list: local first, then remote participants sorted by active speaker / teacher
   const allEntries = useMemo(() => {
     const entries: Array<{
@@ -80,6 +88,24 @@ export function ParticipantGrid({
 
   const totalCount = allEntries.length;
 
+  // Toggle pin on tile click
+  const handlePinToggle = (uid: UID) => {
+    setPinnedUid((prev) => (prev === uid ? null : uid));
+  };
+
+  // Adjust stream quality when pinned UID changes
+  useEffect(() => {
+    if (!onStreamQualityChange) return;
+    if (pinnedUid !== null) {
+      onStreamQualityChange(pinnedUid, 'high');
+      allEntries.forEach((e) => {
+        if (e.uid !== pinnedUid && !e.isLocal) {
+          onStreamQualityChange(e.uid, 'low');
+        }
+      });
+    }
+  }, [pinnedUid, allEntries, onStreamQualityChange]);
+
   // ── CASE 0: Screen Share Mode (Main Presentation + Bottom Thumbnail Strip) ───
   if (screenShareUid !== undefined && screenShareUid !== null) {
     const screenOwner = screenShareUid === localParticipant?.uid
@@ -108,7 +134,7 @@ export function ParticipantGrid({
             isScreenShareTrack
             className="w-full h-full"
           />
-          <div className="absolute top-3 left-3 px-3 py-1.5 bg-slate-950/80 backdrop-blur-md border border-purple-500/40 rounded-xl text-xs text-purple-300 font-bold flex items-center gap-2 shadow-lg">
+          <div className="absolute top-3 left-3 px-3 py-1.5 bg-slate-950/80 backdrop-blur-md border border-purple-500/40 rounded-xl text-xs text-purple-300 font-bold flex items-center gap-2 shadow-lg z-20">
             <Monitor className="w-3.5 h-3.5 text-purple-400" />
             <span>Active Screen Share</span>
           </div>
@@ -126,6 +152,56 @@ export function ParticipantGrid({
               isLocal={entry.isLocal}
               localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
               className="w-44 h-full shrink-0"
+              onPinToggle={handlePinToggle}
+              canModerate={canModerate}
+              onMuteParticipant={onMuteParticipant}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── CASE: Click-to-Expand Stage Mode ─────────────────────────────────────────
+  if (pinnedUid !== null) {
+    const pinnedEntry = allEntries.find((e) => e.uid === pinnedUid) || allEntries[0];
+    const filmstripEntries = allEntries.filter((e) => e.uid !== pinnedEntry.uid).slice(0, FILMSTRIP_MAX);
+
+    return (
+      <div className={`flex flex-col h-full w-full gap-3 ${className}`}>
+        {/* Promoted Main Stage */}
+        <div className="flex-1 min-h-0 relative">
+          <ParticipantTile
+            key={String(pinnedEntry.uid)}
+            uid={pinnedEntry.uid}
+            participant={pinnedEntry.participant}
+            remoteUser={pinnedEntry.remoteUser}
+            isActiveSpeaker={pinnedEntry.uid === activeSpeakerUid}
+            isLocal={pinnedEntry.isLocal}
+            localVideoTrack={pinnedEntry.isLocal ? localVideoTrack : undefined}
+            isPinned
+            onPinToggle={handlePinToggle}
+            canModerate={canModerate}
+            onMuteParticipant={onMuteParticipant}
+            className="w-full h-full"
+          />
+        </div>
+
+        {/* Filmstrip Strip */}
+        <div className="h-28 shrink-0 flex gap-2.5 overflow-x-auto pb-1">
+          {filmstripEntries.map((entry) => (
+            <ParticipantTile
+              key={String(entry.uid)}
+              uid={entry.uid}
+              participant={entry.participant}
+              remoteUser={entry.remoteUser}
+              isActiveSpeaker={entry.uid === activeSpeakerUid}
+              isLocal={entry.isLocal}
+              localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+              onPinToggle={handlePinToggle}
+              canModerate={canModerate}
+              onMuteParticipant={onMuteParticipant}
+              className="w-40 h-full shrink-0"
             />
           ))}
         </div>
@@ -157,6 +233,9 @@ export function ParticipantGrid({
           isActiveSpeaker={entry.uid === activeSpeakerUid}
           isLocal={entry.isLocal}
           localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+          onPinToggle={handlePinToggle}
+          canModerate={canModerate}
+          onMuteParticipant={onMuteParticipant}
           className="w-full h-full max-h-full"
         />
       </div>
@@ -180,6 +259,9 @@ export function ParticipantGrid({
             isActiveSpeaker={mainEntry.uid === activeSpeakerUid}
             isLocal={mainEntry.isLocal}
             localVideoTrack={mainEntry.isLocal ? localVideoTrack : undefined}
+            onPinToggle={handlePinToggle}
+            canModerate={canModerate}
+            onMuteParticipant={onMuteParticipant}
             className="w-full h-full"
           />
         </div>
@@ -195,6 +277,9 @@ export function ParticipantGrid({
               isActiveSpeaker={entry.uid === activeSpeakerUid}
               isLocal={entry.isLocal}
               localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+              onPinToggle={handlePinToggle}
+              canModerate={canModerate}
+              onMuteParticipant={onMuteParticipant}
               className="w-40 h-full shrink-0"
             />
           ))}
@@ -216,6 +301,9 @@ export function ParticipantGrid({
             isActiveSpeaker={entry.uid === activeSpeakerUid}
             isLocal={entry.isLocal}
             localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+            onPinToggle={handlePinToggle}
+            canModerate={canModerate}
+            onMuteParticipant={onMuteParticipant}
             className="w-full h-full"
           />
         ))}
@@ -241,6 +329,9 @@ export function ParticipantGrid({
               isActiveSpeaker={entry.uid === activeSpeakerUid}
               isLocal={entry.isLocal}
               localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+              onPinToggle={handlePinToggle}
+              canModerate={canModerate}
+              onMuteParticipant={onMuteParticipant}
               className="w-full h-full"
             />
           </div>
@@ -262,6 +353,9 @@ export function ParticipantGrid({
             isActiveSpeaker={entry.uid === activeSpeakerUid}
             isLocal={entry.isLocal}
             localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+            onPinToggle={handlePinToggle}
+            canModerate={canModerate}
+            onMuteParticipant={onMuteParticipant}
             className="w-full h-full"
           />
         ))}
@@ -282,6 +376,9 @@ export function ParticipantGrid({
             isActiveSpeaker={entry.uid === activeSpeakerUid}
             isLocal={entry.isLocal}
             localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+            onPinToggle={handlePinToggle}
+            canModerate={canModerate}
+            onMuteParticipant={onMuteParticipant}
             className="w-full h-full"
           />
         ))}
@@ -302,6 +399,9 @@ export function ParticipantGrid({
             isActiveSpeaker={entry.uid === activeSpeakerUid}
             isLocal={entry.isLocal}
             localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+            onPinToggle={handlePinToggle}
+            canModerate={canModerate}
+            onMuteParticipant={onMuteParticipant}
             className="w-full h-full min-h-[140px]"
           />
         ))}
@@ -325,6 +425,9 @@ export function ParticipantGrid({
           isActiveSpeaker={mainEntry.uid === activeSpeakerUid}
           isLocal={mainEntry.isLocal}
           localVideoTrack={mainEntry.isLocal ? localVideoTrack : undefined}
+          onPinToggle={handlePinToggle}
+          canModerate={canModerate}
+          onMuteParticipant={onMuteParticipant}
           className="w-full h-full"
         />
       </div>
@@ -340,6 +443,9 @@ export function ParticipantGrid({
             isActiveSpeaker={entry.uid === activeSpeakerUid}
             isLocal={entry.isLocal}
             localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+            onPinToggle={handlePinToggle}
+            canModerate={canModerate}
+            onMuteParticipant={onMuteParticipant}
             className="w-40 h-full shrink-0"
           />
         ))}

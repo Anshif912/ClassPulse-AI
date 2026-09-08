@@ -5,11 +5,12 @@ import AgoraRTC, {
   ICameraVideoTrack,
   IMicrophoneAudioTrack,
   ILocalVideoTrack,
+  ILocalAudioTrack,
   UID,
   ConnectionState,
   NetworkQuality,
 } from 'agora-rtc-sdk-ng';
-import { RtcParticipant, ClassroomEvent } from '../types';
+import { RtcParticipant, ClassroomEvent, LatencyMetrics } from '../types';
 import { api } from '../services/api';
 import { soundManager } from '../services/soundManager';
 
@@ -46,6 +47,7 @@ interface UseAgoraRTCReturn {
   localVideoTrack: ICameraVideoTrack | null;
   localAudioTrack: IMicrophoneAudioTrack | null;
   screenTrack: ILocalVideoTrack | null;
+  screenAudioTrack: ILocalAudioTrack | null;
   // Participants
   remoteUsers: IAgoraRTCRemoteUser[];
   participants: Map<UID, RtcParticipant>;
@@ -62,6 +64,9 @@ interface UseAgoraRTCReturn {
   isMicOn: boolean;
   isScreenSharing: boolean;
   isJoining: boolean;
+  isMutedByModerator: boolean;
+  moderationReason?: string;
+  latencyMetrics: LatencyMetrics;
   // Actions
   join: () => Promise<void>;
   leave: () => Promise<void>;
@@ -71,6 +76,10 @@ interface UseAgoraRTCReturn {
   stopScreenShare: () => Promise<void>;
   playRemoteVideo: (uid: UID, container: HTMLElement) => void;
   playLocalVideo: (container: HTMLElement) => void;
+  recordLatencyStage: (stage: keyof LatencyMetrics) => void;
+  setParticipantStreamQuality: (uid: UID, quality: 'high' | 'low') => Promise<void>;
+  muteParticipant: (targetUserId: string, reason?: string) => Promise<void>;
+  unmuteParticipant: (targetUserId: string) => Promise<void>;
 }
 
 export function classifyAgoraError(err: any): string {
@@ -130,11 +139,15 @@ export function useAgoraRTC({
   const [isCameraOn, setIsCameraOn] = useState(initialCameraOn);
   const [isMicOn, setIsMicOn] = useState(initialMicOn);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isMutedByModerator, setIsMutedByModerator] = useState(false);
+  const [moderationReason, setModerationReason] = useState<string | undefined>(undefined);
+  const [latencyMetrics, setLatencyMetrics] = useState<LatencyMetrics>({});
 
   // ─── Tracks & Refs ──────────────────────────────────────────────────────────
   const [localVideoTrack, setLocalVideoTrack] = useState<ICameraVideoTrack | null>(null);
   const [localAudioTrack, setLocalAudioTrack] = useState<IMicrophoneAudioTrack | null>(null);
   const [screenTrack, setScreenTrack] = useState<ILocalVideoTrack | null>(null);
+  const [screenAudioTrack, setScreenAudioTrack] = useState<ILocalAudioTrack | null>(null);
 
   const initialCameraOnRef = useRef(initialCameraOn);
   initialCameraOnRef.current = initialCameraOn;
@@ -145,6 +158,7 @@ export function useAgoraRTC({
   const localVideoTrackRef = useRef<ICameraVideoTrack | null>(null);
   const localAudioTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
   const screenTrackRef = useRef<ILocalVideoTrack | null>(null);
+  const screenAudioTrackRef = useRef<ILocalAudioTrack | null>(null);
   const wasCameraActiveBeforeScreenShareRef = useRef<boolean>(false);
   const isMountedRef = useRef(true);
   const isJoiningRef = useRef(false);
@@ -499,6 +513,12 @@ export function useAgoraRTC({
         screenTrackRef.current = null;
         setScreenTrack(null);
       }
+      if (screenAudioTrackRef.current) {
+        screenAudioTrackRef.current.stop();
+        screenAudioTrackRef.current.close();
+        screenAudioTrackRef.current = null;
+        setScreenAudioTrack(null);
+      }
       if (localVideoTrackRef.current) {
         localVideoTrackRef.current.stop();
         localVideoTrackRef.current.close();
@@ -568,6 +588,11 @@ export function useAgoraRTC({
 
   // ─── Meeting Microphone Toggle (Separated from AI Mic) ───────────────────────
   const toggleMic = useCallback(async () => {
+    if (isMutedByModerator) {
+      addEvent('SYSTEM', 'Moderator', 'You cannot unmute: Microphone is locked by moderator.');
+      return;
+    }
+
     soundManager.unlock();
     if (isMicOn) {
       soundManager.play('mic_off');
@@ -597,9 +622,9 @@ export function useAgoraRTC({
       setIsMicOn(true);
       if (localParticipant) setLocalParticipant({ ...localParticipant, hasAudio: true });
     }
-  }, [isMicOn, localParticipant]);
+  }, [isMicOn, isMutedByModerator, localParticipant, addEvent]);
 
-  // ─── Screen Sharing (Preserves Camera & Text Detail Quality) ─────────────────
+  // ─── Screen Sharing (With System Audio Support & Detail Quality) ──────────────
   const stopScreenShare = useCallback(async () => {
     if (!isScreenSharing) return;
     soundManager.play('screen_share_stop');
@@ -612,6 +637,16 @@ export function useAgoraRTC({
         screenTrackRef.current.close();
         screenTrackRef.current = null;
         setScreenTrack(null);
+      }
+
+      if (screenAudioTrackRef.current) {
+        if (clientRef.current) {
+          try { await clientRef.current.unpublish(screenAudioTrackRef.current); } catch {}
+        }
+        screenAudioTrackRef.current.stop();
+        screenAudioTrackRef.current.close();
+        screenAudioTrackRef.current = null;
+        setScreenAudioTrack(null);
       }
 
       // Restore camera video track safely if camera was active prior to screen share
@@ -652,31 +687,50 @@ export function useAgoraRTC({
         }
       }
 
-      // 2. Create dedicated screen track with presentation detail encoder (1080p Detail Mode)
+      // 2. Create dedicated screen track with presentation detail encoder (1080p Detail Mode) + Audio Capture
       const sTrack = await AgoraRTC.createScreenVideoTrack(
         {
           encoderConfig: {
             width: 1920,
             height: 1080,
-            frameRate: 10,
+            frameRate: 15,
             bitrateMin: 800,
             bitrateMax: 2500,
           },
           optimizationMode: 'detail',
         },
-        'disable'
+        'auto'
       );
 
-      const screenVideo = Array.isArray(sTrack) ? sTrack[0] : sTrack;
+      let screenVideo: ILocalVideoTrack;
+      let screenAudio: ILocalAudioTrack | null = null;
+
+      if (Array.isArray(sTrack)) {
+        screenVideo = sTrack[0];
+        screenAudio = sTrack[1] as ILocalAudioTrack;
+      } else {
+        screenVideo = sTrack;
+      }
+
       screenTrackRef.current = screenVideo;
       setScreenTrack(screenVideo);
+
+      if (screenAudio) {
+        screenAudioTrackRef.current = screenAudio;
+        setScreenAudioTrack(screenAudio);
+      }
 
       // Handle browser's native "Stop sharing" floating bar
       screenVideo.on('track-ended', () => {
         stopScreenShare();
       });
 
-      await clientRef.current.publish(screenVideo);
+      const tracksToPublish: any[] = [screenVideo];
+      if (screenAudio) {
+        tracksToPublish.push(screenAudio);
+      }
+
+      await clientRef.current.publish(tracksToPublish);
       setIsScreenSharing(true);
       if (localParticipant) setLocalParticipant({ ...localParticipant, hasVideo: true });
       soundManager.play('screen_share_start');
@@ -698,6 +752,72 @@ export function useAgoraRTC({
       }
     }
   }, [isScreenSharing, isCameraOn, stopScreenShare, localParticipant, addEvent]);
+
+  // ─── Remote Moderation Polling & Auto-Mute Enforcement ──────────────────────
+  useEffect(() => {
+    if (!joined) return;
+    let active = true;
+
+    const checkModeration = async () => {
+      try {
+        const res = await api.getClassModeration(classIdRef.current);
+        if (!active) return;
+        if (res?.isUserMutedByModerator) {
+          setIsMutedByModerator(true);
+          setModerationReason(res.myModeration?.reason || 'Muted by teacher');
+          // Physically enforce mute on student mic
+          if (localAudioTrackRef.current && localAudioTrackRef.current.enabled) {
+            localAudioTrackRef.current.setEnabled(false);
+            setIsMicOn(false);
+            soundManager.play('mic_off');
+            addEvent('SYSTEM', 'Moderator', 'You have been muted by the teacher.');
+          }
+        } else {
+          setIsMutedByModerator(false);
+          setModerationReason(undefined);
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(checkModeration, 2500);
+    checkModeration();
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [joined, addEvent]);
+
+  // ─── Dual-Stream Switching for Click-to-Expand ──────────────────────────────
+  const setParticipantStreamQuality = useCallback(async (uid: UID, quality: 'high' | 'low') => {
+    if (!clientRef.current) return;
+    try {
+      await clientRef.current.setRemoteVideoStreamType(uid, quality === 'high' ? 0 : 1);
+    } catch (e) {
+      console.warn('[AGORA RTC] Stream quality switch failed:', e);
+    }
+  }, []);
+
+  // ─── Moderation Actions (Teacher only) ──────────────────────────────────────
+  const muteParticipant = useCallback(async (targetUserId: string, reason?: string) => {
+    await api.muteParticipant(classIdRef.current, targetUserId, reason);
+  }, []);
+
+  const unmuteParticipant = useCallback(async (targetUserId: string) => {
+    await api.unmuteParticipant(classIdRef.current, targetUserId);
+  }, []);
+
+  // ─── 7-Stage Latency Instrumentation ─────────────────────────────────────────
+  const recordLatencyStage = useCallback((stage: keyof LatencyMetrics) => {
+    const now = Date.now();
+    setLatencyMetrics((prev) => {
+      const updated = { ...prev, [stage]: now };
+      if (updated.micCapturedAt && updated.audioPlaybackAt) {
+        updated.totalRoundtripMs = updated.audioPlaybackAt - updated.micCapturedAt;
+      }
+      return updated;
+    });
+  }, []);
 
   const playRemoteVideo = useCallback((uid: UID, container: HTMLElement) => {
     const user = remoteUsers.find((u) => u.uid === uid);
@@ -727,6 +847,7 @@ export function useAgoraRTC({
     localVideoTrack,
     localAudioTrack,
     screenTrack,
+    screenAudioTrack,
     remoteUsers,
     participants,
     localParticipant,
@@ -740,6 +861,9 @@ export function useAgoraRTC({
     isMicOn,
     isScreenSharing,
     isJoining,
+    isMutedByModerator,
+    moderationReason,
+    latencyMetrics,
     join,
     leave,
     toggleCamera,
@@ -748,5 +872,9 @@ export function useAgoraRTC({
     stopScreenShare,
     playRemoteVideo,
     playLocalVideo,
+    recordLatencyStage,
+    setParticipantStreamQuality,
+    muteParticipant,
+    unmuteParticipant,
   };
 }

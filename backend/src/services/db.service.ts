@@ -173,6 +173,44 @@ export interface ClassroomInsight {
   recommendedAction: string;
 }
 
+// ─── Agora Cloud Recording Session ──────────────────────────────────────────
+export interface RecordingFile {
+  filename: string;
+  trackType: string;
+  url?: string;
+  sliceStartTime?: number;
+  fileSize?: number;
+}
+
+export interface RecordingSession {
+  id: string;                      // internal recording id
+  classId: string;
+  meetingSessionId?: string;
+  resourceId: string;
+  sid: string;
+  agoraChannel: string;
+  recordingUid: number;
+  startedAt: string;
+  stoppedAt?: string;
+  durationSeconds?: number;
+  status: 'STARTING' | 'RECORDING' | 'STOPPED' | 'FAILED';
+  fileList?: RecordingFile[];
+  storageMode?: 's3' | 'oss' | 'gcs' | 'local_mock';
+  serverUrl?: string;
+  error?: string;
+}
+
+// ─── Remote Moderation State ────────────────────────────────────────────────
+export interface ModerationRecord {
+  userId: string;
+  agoraUid?: number;
+  isMuted: boolean;
+  mutedBy: string;                 // User.id of moderator
+  mutedByName?: string;
+  mutedAt: string;
+  reason?: string;
+}
+
 // ─── Full Database Schema ───────────────────────────────────────────────────
 interface DatabaseSchema {
   users: Record<string, User>;                           // keyed by User.id
@@ -186,6 +224,8 @@ interface DatabaseSchema {
   materialChunks: Record<string, MaterialChunk>;         // keyed by id
   conversations: Record<string, AIConversation>;         // keyed by id
   aiMessages: Record<string, AIMessage>;                 // keyed by id
+  recordings: Record<string, RecordingSession>;          // keyed by id
+  moderations: Record<string, Record<string, ModerationRecord>>; // keyed by classId -> userId
 }
 
 class DatabaseService {
@@ -222,6 +262,8 @@ class DatabaseService {
           materialChunks: parsed.materialChunks || {},
           conversations: parsed.conversations || {},
           aiMessages: parsed.aiMessages || {},
+          recordings: parsed.recordings || {},
+          moderations: parsed.moderations || {},
         };
       }
     } catch (err) {
@@ -239,6 +281,8 @@ class DatabaseService {
       materialChunks: {},
       conversations: {},
       aiMessages: {},
+      recordings: {},
+      moderations: {},
     };
   }
 
@@ -778,6 +822,74 @@ class DatabaseService {
 
   public getAllSessions(): LegacySession[] {
     return Object.values(this.data.sessions);
+  }
+
+  // ─── Recording Sessions ─────────────────────────────────────────────────────
+  public saveRecordingSession(recording: RecordingSession): RecordingSession {
+    this.data.recordings[recording.id] = recording;
+    this.persist();
+    return recording;
+  }
+
+  public getRecordingSession(id: string): RecordingSession | undefined {
+    return this.data.recordings[id];
+  }
+
+  public getActiveRecordingSession(classId: string): RecordingSession | undefined {
+    const upperClassId = classId.toUpperCase();
+    return Object.values(this.data.recordings).find(
+      (r) => r.classId.toUpperCase() === upperClassId && (r.status === 'RECORDING' || r.status === 'STARTING')
+    );
+  }
+
+  public updateRecordingSession(id: string, updates: Partial<RecordingSession>): RecordingSession | undefined {
+    const rec = this.data.recordings[id];
+    if (!rec) return undefined;
+    const updated = { ...rec, ...updates };
+    this.data.recordings[id] = updated;
+    this.persist();
+    return updated;
+  }
+
+  public getClassRecordings(classId: string): RecordingSession[] {
+    const upperClassId = classId.toUpperCase();
+    return Object.values(this.data.recordings)
+      .filter((r) => r.classId.toUpperCase() === upperClassId)
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  }
+
+  public getAllRecordings(): RecordingSession[] {
+    return Object.values(this.data.recordings).sort(
+      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+    );
+  }
+
+  // ─── Remote Moderation (Mute/Unmute) ─────────────────────────────────────────
+  public setParticipantModeration(classId: string, userId: string, record: ModerationRecord): void {
+    const upperClassId = classId.toUpperCase();
+    if (!this.data.moderations[upperClassId]) {
+      this.data.moderations[upperClassId] = {};
+    }
+    this.data.moderations[upperClassId][userId] = record;
+    this.persist();
+  }
+
+  public getParticipantModeration(classId: string, userId: string): ModerationRecord | undefined {
+    const upperClassId = classId.toUpperCase();
+    return this.data.moderations[upperClassId]?.[userId];
+  }
+
+  public getClassModerationStates(classId: string): Record<string, ModerationRecord> {
+    const upperClassId = classId.toUpperCase();
+    return this.data.moderations[upperClassId] || {};
+  }
+
+  public clearParticipantModeration(classId: string, userId: string): void {
+    const upperClassId = classId.toUpperCase();
+    if (this.data.moderations[upperClassId]?.[userId]) {
+      delete this.data.moderations[upperClassId][userId];
+      this.persist();
+    }
   }
 }
 

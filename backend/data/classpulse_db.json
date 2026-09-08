@@ -2887,5 +2887,116 @@
       "content": "Electric sacks are specialized organs that store electrostatic charge.",
       "timestamp": "2026-09-08T13:00:20.233Z"
     }
+  },
+  "recordings": {
+    "rec_1788881614283_rmz2": {
+      "id": "rec_1788881614283_rmz2",
+      "classId": "RUNTIME_FULL_TEST_001",
+      "resourceId": "res_mock_1788881614241_99meji",
+      "sid": "sid_mock_1788881614283",
+      "agoraChannel": "class_RUNTIME_FULL_TEST_001",
+      "recordingUid": 999999,
+      "startedAt": "2026-09-08T15:33:34.283Z",
+      "status": "STOPPED",
+      "storageMode": "local_mock",
+      "fileList": [
+        {
+          "filename": "class_RUNTIME_FULL_TEST_001_1788881614283.mp4",
+          "trackType": "audio_and_video",
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          "sliceStartTime": 1788881614283
+        }
+      ],
+      "stoppedAt": "2026-09-08T15:33:34.284Z",
+      "durationSeconds": 1
+    },
+    "rec_1788881629115_ap07": {
+      "id": "rec_1788881629115_ap07",
+      "classId": "RUNTIME_FULL_TEST_001",
+      "resourceId": "res_mock_1788881629113_o03v33",
+      "sid": "sid_mock_1788881629115",
+      "agoraChannel": "class_RUNTIME_FULL_TEST_001",
+      "recordingUid": 999999,
+      "startedAt": "2026-09-08T15:33:49.115Z",
+      "status": "STOPPED",
+      "storageMode": "local_mock",
+      "fileList": [
+        {
+          "filename": "class_RUNTIME_FULL_TEST_001_1788881629115.mp4",
+          "trackType": "audio_and_video",
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          "sliceStartTime": 1788881629115
+        }
+      ],
+      "stoppedAt": "2026-09-08T15:33:49.116Z",
+      "durationSeconds": 1
+    },
+    "rec_1788881663269_0gyf": {
+      "id": "rec_1788881663269_0gyf",
+      "classId": "RUNTIME_FULL_TEST_001",
+      "resourceId": "res_mock_1788881663267_d2f3lb",
+      "sid": "sid_mock_1788881663269",
+      "agoraChannel": "class_RUNTIME_FULL_TEST_001",
+      "recordingUid": 999999,
+      "startedAt": "2026-09-08T15:34:23.269Z",
+      "status": "STOPPED",
+      "storageMode": "local_mock",
+      "fileList": [
+        {
+          "filename": "class_RUNTIME_FULL_TEST_001_1788881663269.mp4",
+          "trackType": "audio_and_video",
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          "sliceStartTime": 1788881663269
+        }
+      ],
+      "stoppedAt": "2026-09-08T15:34:23.270Z",
+      "durationSeconds": 1
+    },
+    "rec_1788883057820_hwc7": {
+      "id": "rec_1788883057820_hwc7",
+      "classId": "REC_VERIFY_01",
+      "resourceId": "res_mock_1788883057819_8r5h4f",
+      "sid": "sid_mock_1788883057821",
+      "agoraChannel": "class_REC_VERIFY_01",
+      "recordingUid": 999999,
+      "startedAt": "2026-09-08T15:57:37.820Z",
+      "status": "STOPPED",
+      "storageMode": "local_mock",
+      "fileList": [
+        {
+          "filename": "class_REC_VERIFY_01_1788883057821.mp4",
+          "trackType": "audio_and_video",
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          "sliceStartTime": 1788883057821
+        }
+      ],
+      "stoppedAt": "2026-09-08T15:57:37.821Z",
+      "durationSeconds": 1
+    },
+    "rec_1788884259976_hky5": {
+      "id": "rec_1788884259976_hky5",
+      "classId": "RUNTIME_FULL_TEST_001",
+      "resourceId": "res_mock_1788884259916_i37jds",
+      "sid": "sid_mock_1788884259977",
+      "agoraChannel": "class_RUNTIME_FULL_TEST_001",
+      "recordingUid": 999999,
+      "startedAt": "2026-09-08T16:17:39.976Z",
+      "status": "STOPPED",
+      "storageMode": "local_mock",
+      "fileList": [
+        {
+          "filename": "class_RUNTIME_FULL_TEST_001_1788884259977.mp4",
+          "trackType": "audio_and_video",
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          "sliceStartTime": 1788884259977
+        }
+      ],
+      "stoppedAt": "2026-09-08T16:17:39.978Z",
+      "durationSeconds": 1
+    }
+  },
+  "moderations": {
+    "RUNTIME_FULL_TEST_001": {},
+    "MOD_CLASS_01": {}
   }
 }

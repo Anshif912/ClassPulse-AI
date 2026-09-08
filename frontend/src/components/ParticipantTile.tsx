@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, memo } from 'react';
 import { IAgoraRTCRemoteUser, UID } from 'agora-rtc-sdk-ng';
-import { Mic, MicOff, VideoOff, GraduationCap, Sparkles } from 'lucide-react';
+import { Mic, MicOff, VideoOff, GraduationCap, Maximize2, Minimize2, VolumeX } from 'lucide-react';
 import { RtcParticipant } from '../types';
 
 interface ParticipantTileProps {
@@ -13,6 +13,10 @@ interface ParticipantTileProps {
   isScreenShareTrack?: boolean;
   size?: 'fit' | 'large' | 'medium' | 'small';
   className?: string;
+  isPinned?: boolean;
+  onPinToggle?: (uid: UID) => void;
+  canModerate?: boolean;
+  onMuteParticipant?: (userId: string) => void;
 }
 
 export const ParticipantTile = memo(function ParticipantTile({
@@ -25,6 +29,10 @@ export const ParticipantTile = memo(function ParticipantTile({
   isScreenShareTrack = false,
   size = 'fit',
   className = '',
+  isPinned = false,
+  onPinToggle,
+  canModerate = false,
+  onMuteParticipant,
 }: ParticipantTileProps) {
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const hasVideo = participant.hasVideo;
@@ -63,20 +71,27 @@ export const ParticipantTile = memo(function ParticipantTile({
 
   return (
     <div
-      className={`relative bg-slate-900/90 rounded-2xl overflow-hidden shadow-xl border transition-all duration-200 flex items-center justify-center ${
+      onClick={() => onPinToggle?.(uid)}
+      className={`relative bg-slate-900/90 rounded-2xl overflow-hidden shadow-xl border transition-all duration-200 flex items-center justify-center cursor-pointer group ${
         isActiveSpeaker
           ? 'border-blue-500 shadow-blue-500/20 ring-2 ring-blue-400/40 ring-offset-2 ring-offset-slate-950'
+          : isPinned
+          ? 'border-indigo-500 ring-2 ring-indigo-400/30'
           : 'border-slate-800/80 hover:border-slate-700/80'
       } ${className}`}
       aria-label={`${name}${isTeacher ? ' (Teacher)' : ''}`}
     >
-      {/* Video layer */}
+      {/* Video layer with face-safe positioning */}
       <div
         ref={videoContainerRef}
         className={`absolute inset-0 w-full h-full ${
           isLocal && !isScreenShareTrack ? 'scale-x-[-1]' : ''
-        }`}
-        style={{ display: hasVideo ? 'block' : 'none' }}
+        } ${isScreenShareTrack ? 'bg-black' : ''}`}
+        style={{
+          display: hasVideo ? 'block' : 'none',
+          objectFit: isScreenShareTrack ? 'contain' : 'cover',
+          objectPosition: 'center 20%', // Face-safe framing policy
+        }}
       />
 
       {/* Avatar fallback when camera is turned off */}
@@ -98,15 +113,48 @@ export const ParticipantTile = memo(function ParticipantTile({
         </div>
       )}
 
-      {/* Camera off badge */}
-      {!hasVideo && (
-        <div className="absolute top-3 right-3 p-1.5 bg-slate-950/70 border border-slate-800 rounded-xl backdrop-blur-md">
-          <VideoOff className="w-3.5 h-3.5 text-slate-400" aria-label="Camera off" />
-        </div>
-      )}
+      {/* Top right action bar: Expand/Pin + Camera Off + Moderator Mute */}
+      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-20">
+        {/* Moderator remote-mute button */}
+        {canModerate && !isLocal && participant.userId && hasAudio && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMuteParticipant?.(participant.userId!);
+            }}
+            title="Mute participant"
+            className="p-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-600/40 rounded-xl text-rose-300 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+          >
+            <VolumeX className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* Click to expand / pin button */}
+        {onPinToggle && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPinToggle(uid);
+            }}
+            title={isPinned ? 'Restore grid' : 'Expand to stage'}
+            className="p-1.5 bg-slate-950/80 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-slate-300 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+          >
+            {isPinned ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        )}
+
+        {/* Camera off badge */}
+        {!hasVideo && (
+          <div className="p-1.5 bg-slate-950/70 border border-slate-800 rounded-xl backdrop-blur-md">
+            <VideoOff className="w-3.5 h-3.5 text-slate-400" aria-label="Camera off" />
+          </div>
+        )}
+      </div>
 
       {/* Bottom participant bar */}
-      <div className="absolute bottom-0 inset-x-0 p-2.5 sm:p-3 bg-gradient-to-t from-black/85 via-black/40 to-transparent flex items-center justify-between gap-2 z-10">
+      <div className="absolute bottom-0 inset-x-0 p-2.5 sm:p-3 bg-gradient-to-t from-black/85 via-black/40 to-transparent flex items-center justify-between gap-2 z-10 pointer-events-none">
         <div className="flex items-center gap-2 min-w-0 bg-slate-950/70 backdrop-blur-md border border-slate-800/80 px-2.5 py-1 rounded-xl">
           {isTeacher && (
             <span className="flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
@@ -139,3 +187,4 @@ export const ParticipantTile = memo(function ParticipantTile({
     </div>
   );
 });
+

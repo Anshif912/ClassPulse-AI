@@ -11,6 +11,7 @@ import {
   Settings,
   PhoneOff,
   BookOpen,
+  VolumeX,
 } from 'lucide-react';
 import { Classroom } from '../types';
 import { useAgoraRTC } from '../hooks/useAgoraRTC';
@@ -23,6 +24,7 @@ import { ConnectionStatus } from './ConnectionStatus';
 import { ClassroomToasts } from './ClassroomToasts';
 import { MeetingSettingsModal } from './MeetingSettingsModal';
 import { Logo } from './common/Logo';
+import { api } from '../services/api';
 
 interface NativeClassroomProps {
   classroom: Classroom;
@@ -68,6 +70,12 @@ export function NativeClassroom({
   const [rtcError, setRtcError] = useState<string | null>(null);
   const sessionTimer = useSessionTimer();
 
+  // ─── Agora Cloud Recording State ────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isRecordingLoading, setIsRecordingLoading] = useState(false);
+  const recordingTimerRef = useRef<any>(null);
+
   const handleToggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -82,7 +90,7 @@ export function NativeClassroom({
     setLayoutMode((prev) => (prev === 'grid' ? 'speaker' : 'grid'));
   }, []);
 
-  // Agora RTC
+  // Agora RTC Hook
   const {
     localVideoTrack,
     localAudioTrack,
@@ -99,12 +107,17 @@ export function NativeClassroom({
     isMicOn,
     isScreenSharing,
     isJoining,
+    isMutedByModerator,
+    moderationReason,
     join,
     leave,
     toggleCamera,
     toggleMic,
     startScreenShare,
     stopScreenShare,
+    setParticipantStreamQuality,
+    muteParticipant,
+    unmuteParticipant,
   } = useAgoraRTC({
     classId: classroom.classId,
     uid,
@@ -122,6 +135,64 @@ export function NativeClassroom({
     isMicOn,
   });
 
+  // Check active recording state periodically
+  useEffect(() => {
+    let active = true;
+    const checkRecording = async () => {
+      try {
+        const res = await api.getActiveRecording(classroom.classId);
+        if (!active) return;
+        if (res?.isRecording && res.recording) {
+          setIsRecording(true);
+          const startMs = new Date(res.recording.startedAt).getTime();
+          setRecordingDuration(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
+        } else {
+          setIsRecording(false);
+        }
+      } catch {}
+    };
+
+    checkRecording();
+    const interval = setInterval(checkRecording, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [classroom.classId]);
+
+  // Handle Recording Timer Tick
+  useEffect(() => {
+    if (isRecording) {
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      setRecordingDuration(0);
+    }
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    };
+  }, [isRecording]);
+
+  const handleToggleRecording = useCallback(async () => {
+    if (isRecordingLoading) return;
+    setIsRecordingLoading(true);
+    try {
+      if (isRecording) {
+        await api.stopRecording(classroom.classId);
+        setIsRecording(false);
+      } else {
+        await api.startRecording(classroom.classId);
+        setIsRecording(true);
+      }
+    } catch (err: any) {
+      console.error('[RECORDING_TOGGLE_ERROR]', err);
+    } finally {
+      setIsRecordingLoading(false);
+    }
+  }, [classroom.classId, isRecording, isRecordingLoading]);
+
   useEffect(() => {
     join();
     return () => { leave(); };
@@ -138,9 +209,12 @@ export function NativeClassroom({
   }, [toggleMic, toggleCamera]);
 
   const handleLeave = useCallback(async () => {
+    if (isRecording && role === 'teacher') {
+      try { await api.stopRecording(classroom.classId); } catch {}
+    }
     await leave();
     onLeave();
-  }, [leave, onLeave]);
+  }, [leave, onLeave, isRecording, role, classroom.classId]);
 
   const handleToggleScreenShare = useCallback(() => {
     if (isScreenSharing) stopScreenShare();
@@ -148,11 +222,10 @@ export function NativeClassroom({
   }, [isScreenSharing, startScreenShare, stopScreenShare]);
 
   const totalParticipants = (localParticipant ? 1 : 0) + remoteUsers.length;
-  const isConnected = connectionState === 'CONNECTED';
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#050816] text-slate-100 overflow-hidden select-none antialiased">
-      {/* ── Top Classroom Header Bar (Panel 3 Reference) ────────────────────── */}
+      {/* ── Top Classroom Header Bar ────────────────────────────────────────── */}
       <header className="h-16 px-6 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md flex items-center justify-between shrink-0 z-20">
         {/* Left: Class Subject with Live Dot & Dropdown */}
         <div className="flex items-center gap-3">
@@ -228,9 +301,17 @@ export function NativeClassroom({
         </div>
       </header>
 
-      {/* ── Main Fullscreen Video Stage (NO SIDEBAR!) ──────────────────────── */}
+      {/* ── Top Moderator Mute Banner (if muted) ─────────────────────────────── */}
+      {isMutedByModerator && (
+        <div className="bg-amber-950/90 border-b border-amber-600/50 px-4 py-2 flex items-center justify-center gap-2 text-amber-200 text-xs font-bold shadow-lg animate-in slide-in-from-top duration-200 z-20">
+          <VolumeX className="w-4 h-4 text-amber-400" />
+          <span>You have been muted by the teacher. Microphone is locked.</span>
+        </div>
+      )}
+
+      {/* ── Main Fullscreen Video Stage ─────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative p-4 gap-4">
-        {/* Dynamic Video Stage (Takes 100% width when AI panel is closed) */}
+        {/* Dynamic Video Stage */}
         <div className="flex-1 h-full min-w-0 relative flex flex-col justify-center">
           <ConnectionStatus connectionState={connectionState} onRetry={join} />
 
@@ -244,6 +325,9 @@ export function NativeClassroom({
               screenShareUid={isScreenSharing ? effectiveUid : undefined}
               screenTrack={screenTrack}
               layoutMode={layoutMode}
+              canModerate={role === 'teacher'}
+              onMuteParticipant={(targetUserId) => muteParticipant(targetUserId, 'Muted by teacher')}
+              onStreamQualityChange={setParticipantStreamQuality}
               className="h-full w-full"
             />
           ) : (
@@ -270,7 +354,7 @@ export function NativeClassroom({
           </div>
         )}
 
-        {/* AI Tutor Panel (Right Drawer from Panel 4) */}
+        {/* AI Tutor Panel (Right Drawer) */}
         {isAIPanelOpen && (
           <div className="w-80 sm:w-96 shrink-0 h-full rounded-2xl overflow-hidden border border-purple-500/30 shadow-2xl bg-[#070B18] animate-in slide-in-from-right-4 duration-200">
             <AIClassroomPanel
@@ -283,7 +367,7 @@ export function NativeClassroom({
         )}
       </div>
 
-      {/* ── Centered Floating Control Dock (Panel 3) ─────────────────────────── */}
+      {/* ── Centered Floating Control Dock ─────────────────────────────────── */}
       <MeetingControls
         isMicOn={isMicOn}
         isCameraOn={isCameraOn}
@@ -293,9 +377,15 @@ export function NativeClassroom({
         participantCount={totalParticipants}
         connectionState={connectionState}
         networkQuality={networkQuality}
+        isTeacher={role === 'teacher'}
+        isRecording={isRecording}
+        recordingDuration={recordingDuration}
+        isRecordingLoading={isRecordingLoading}
+        isMutedByModerator={isMutedByModerator}
         onToggleMic={toggleMic}
         onToggleCamera={toggleCamera}
         onToggleScreenShare={handleToggleScreenShare}
+        onToggleRecording={handleToggleRecording}
         onToggleAIPanel={() => setIsAIPanelOpen((v) => !v)}
         onToggleParticipantsPanel={() => setIsParticipantsPanelOpen((v) => !v)}
         onLeave={handleLeave}

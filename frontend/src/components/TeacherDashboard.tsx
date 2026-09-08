@@ -25,8 +25,9 @@ import {
   AlertCircle,
   X,
   Check,
+  Disc,
 } from 'lucide-react';
-import { CreateClassResponse, Classroom } from '../types';
+import { CreateClassResponse, Classroom, RecordingSession } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from './common/Logo';
@@ -58,6 +59,26 @@ export function TeacherDashboard() {
   const [insightsData, setInsightsData] = useState<any | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
+
+  // Agora Cloud Recordings state
+  const [isRecordingsModalOpen, setIsRecordingsModalOpen] = useState(false);
+  const [allRecordings, setAllRecordings] = useState<RecordingSession[]>([]);
+  const [isLoadingRecordings, setIsLoadingRecordings] = useState(false);
+  const [recordingsError, setRecordingsError] = useState<string | null>(null);
+  const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
+
+  const loadAllRecordings = async () => {
+    setIsLoadingRecordings(true);
+    setRecordingsError(null);
+    try {
+      const res = await api.getAllRecordings();
+      setAllRecordings(res?.recordings || []);
+    } catch (err: any) {
+      setRecordingsError(err.message || 'Failed to load cloud recordings.');
+    } finally {
+      setIsLoadingRecordings(false);
+    }
+  };
 
   const loadClassInsights = async (targetClassId?: string) => {
     const classToFetch = targetClassId || insightsClassId || (myClasses.length > 0 ? myClasses[0].classId : '');
@@ -292,8 +313,8 @@ export function TeacherDashboard() {
           </div>
         )}
 
-        {/* 2. Four Quick Action Cards (Teacher Hierarchy: Create=Blue, Upload=Cyan, Manage=Indigo, AI=Purple) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 2. Five Quick Action Cards (Create=Blue, Upload=Cyan, Manage=Indigo, AI=Purple, Recordings=Rose) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <button
             onClick={() => setIsCreateModalOpen(true)}
             className="p-4 bg-white rounded-2xl border border-[#E2E8F0] hover:border-[#2563EB]/50 hover:shadow-md transition-all text-left group cursor-pointer"
@@ -340,6 +361,20 @@ export function TeacherDashboard() {
             </div>
             <p className="text-xs font-bold text-[#0F172A]">AI Insights</p>
             <p className="text-[11px] text-[#64748B]">Previous meets & learning gaps</p>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsRecordingsModalOpen(true);
+              loadAllRecordings();
+            }}
+            className="p-4 bg-white rounded-2xl border border-[#E2E8F0] hover:border-rose-500/50 hover:shadow-md transition-all text-left group cursor-pointer col-span-2 sm:col-span-1"
+          >
+            <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 mb-3 group-hover:scale-105 transition-transform">
+              <Disc className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-[#0F172A]">Past Recordings</p>
+            <p className="text-[11px] text-[#64748B]">Agora Cloud Recordings</p>
           </button>
         </div>
 
@@ -995,6 +1030,128 @@ export function TeacherDashboard() {
                     )}
                   </div>
                 ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Past Recordings Modal ─────────────────────────────────────────── */}
+        {isRecordingsModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-3xl shadow-2xl border border-[#E2E8F0] flex flex-col overflow-hidden animate-in fade-in">
+              {/* Header */}
+              <div className="p-6 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-[#F8FAFC]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+                    <Disc className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-[#0F172A]">Agora Cloud Recordings</h3>
+                    <p className="text-xs text-[#64748B]">All recorded classroom lecture sessions</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsRecordingsModalOpen(false);
+                    setPlayingVideoUrl(null);
+                  }}
+                  className="w-8 h-8 rounded-full bg-white border border-[#E2E8F0] hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {/* Active Video Player Overlay if playing */}
+                {playingVideoUrl && (
+                  <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3 shadow-xl">
+                    <div className="flex items-center justify-between text-xs text-white">
+                      <span className="font-bold flex items-center gap-2">
+                        <Play className="w-4 h-4 text-emerald-400 fill-emerald-400" />
+                        Lecture Recording Playback
+                      </span>
+                      <button
+                        onClick={() => setPlayingVideoUrl(null)}
+                        className="text-slate-400 hover:text-white font-bold"
+                      >
+                        Close Player ✕
+                      </button>
+                    </div>
+                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
+                      <video
+                        src={playingVideoUrl}
+                        controls
+                        autoPlay
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {isLoadingRecordings ? (
+                  <div className="py-16 text-center space-y-3">
+                    <div className="w-8 h-8 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin mx-auto" />
+                    <p className="text-xs text-[#64748B] font-semibold">Loading cloud recordings...</p>
+                  </div>
+                ) : recordingsError ? (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 font-bold">
+                    {recordingsError}
+                  </div>
+                ) : allRecordings.length === 0 ? (
+                  <div className="py-16 text-center space-y-2">
+                    <Disc className="w-10 h-10 text-slate-300 mx-auto" />
+                    <p className="text-sm font-bold text-[#0F172A]">No recordings yet</p>
+                    <p className="text-xs text-[#64748B] max-w-sm mx-auto">
+                      Click the "Record" button during live classroom sessions to capture video, audio, and screen shares to Agora Cloud.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {allRecordings.map((rec) => {
+                      const durMin = rec.durationSeconds ? Math.floor(rec.durationSeconds / 60) : 0;
+                      const durSec = rec.durationSeconds ? rec.durationSeconds % 60 : 0;
+                      const fileUrl = rec.fileList?.[0]?.url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
+                      return (
+                        <div
+                          key={rec.id}
+                          className="p-4 rounded-2xl border border-[#E2E8F0] hover:border-[#CBD5E1] bg-white transition-all flex items-center justify-between gap-4"
+                        >
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 border border-rose-100 text-rose-600">
+                                {rec.classId}
+                              </span>
+                              <span className="text-[10px] font-bold text-[#64748B]">
+                                {new Date(rec.startedAt).toLocaleString([], {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-[#0F172A] truncate">
+                              Channel: {rec.agoraChannel}
+                            </p>
+                            <p className="text-[11px] text-[#64748B]">
+                              Duration: {durMin}m {durSec}s • Status: {rec.status}
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={() => setPlayingVideoUrl(fileUrl)}
+                            className="px-4 py-2 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-white" />
+                            <span>Play</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

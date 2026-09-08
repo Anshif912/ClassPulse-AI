@@ -530,6 +530,82 @@ router.get('/:classId/insights',
   }
 );
 
+// ─── POST /api/classes/:classId/moderation/mute-participant ──────────────────
+// Teacher-only: remote-mute a specific student's microphone
+router.post('/:classId/moderation/mute-participant',
+  requireAuth,
+  requireTeacherOwnership(),
+  (req: Request, res: Response): void => {
+    const classId = req.params.classId.toUpperCase();
+    const { targetUserId, reason } = req.body as { targetUserId?: string; reason?: string };
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'targetUserId is required.' });
+      return;
+    }
+
+    const record = {
+      userId: targetUserId,
+      isMuted: true,
+      mutedBy: req.user!.id,
+      mutedByName: req.user!.name,
+      mutedAt: new Date().toISOString(),
+      reason: reason || 'Muted by teacher',
+    };
+
+    dbService.setParticipantModeration(classId, targetUserId, record);
+    console.log(`[MODERATION_MUTE] class=${classId} teacher=${req.user!.email} muted student=${targetUserId}`);
+
+    res.json({
+      success: true,
+      message: `Participant ${targetUserId} has been muted.`,
+      moderation: record,
+    });
+  }
+);
+
+// ─── POST /api/classes/:classId/moderation/unmute-participant ────────────────
+// Teacher-only: allow a previously muted student to unmute
+router.post('/:classId/moderation/unmute-participant',
+  requireAuth,
+  requireTeacherOwnership(),
+  (req: Request, res: Response): void => {
+    const classId = req.params.classId.toUpperCase();
+    const { targetUserId } = req.body as { targetUserId?: string };
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'targetUserId is required.' });
+      return;
+    }
+
+    dbService.clearParticipantModeration(classId, targetUserId);
+    console.log(`[MODERATION_UNMUTE] class=${classId} teacher=${req.user!.email} unmuted student=${targetUserId}`);
+
+    res.json({
+      success: true,
+      message: `Participant ${targetUserId} has been unmuted.`,
+    });
+  }
+);
+
+// ─── GET /api/classes/:classId/moderation ────────────────────────────────────
+// Members: get moderation state for the classroom
+router.get('/:classId/moderation',
+  requireAuth,
+  requireMembership(),
+  (req: Request, res: Response): void => {
+    const classId = req.params.classId.toUpperCase();
+    const moderations = dbService.getClassModerationStates(classId);
+    const myModeration = dbService.getParticipantModeration(classId, req.user!.id);
+
+    res.json({
+      moderations,
+      isUserMutedByModerator: Boolean(myModeration?.isMuted),
+      myModeration: myModeration || null,
+    });
+  }
+);
+
 export default router;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

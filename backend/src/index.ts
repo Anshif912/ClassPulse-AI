@@ -10,6 +10,7 @@ import chatRoutes from './routes/chat.routes';
 import agoraRoutes from './routes/agora.routes';
 import classRoutes from './routes/classes.routes';
 import authRoutes from './routes/auth.routes';
+import recordingRoutes from './routes/recording.routes';
 
 const app = express();
 
@@ -95,6 +96,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);          // Google OAuth + session management
 app.use('/api/classes', classRoutes);      // Classroom CRUD (auth-protected)
+app.use('/api/classes', recordingRoutes);  // Agora Cloud Recording (auth-protected)
 app.use('/api/agora', agoraRoutes);        // RTC token + attendance (auth-protected)
 app.use('/api/chat', chatRoutes);          // AI chat (classroom = auth-protected, legacy = open)
 app.use('/api/session', sessionRoutes);    // Legacy companion sessions (preserved)

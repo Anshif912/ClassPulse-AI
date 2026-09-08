@@ -279,6 +279,46 @@ export const api = {
     return request('/classes/insights/summary');
   },
 
+  // ─── Agora Cloud Recording API ────────────────────────────────────────────
+  async startRecording(classId: string): Promise<{ success: boolean; recordingId: string; status: string; startedAt: string }> {
+    return request(`/classes/${classId}/recording/start`, { method: 'POST' });
+  },
+
+  async stopRecording(classId: string): Promise<{ success: boolean; recordingId: string; status: string; durationSeconds?: number; fileList?: any[] }> {
+    return request(`/classes/${classId}/recording/stop`, { method: 'POST' });
+  },
+
+  async getActiveRecording(classId: string): Promise<{ isRecording: boolean; recording: any | null }> {
+    return request(`/classes/${classId}/recording/active`);
+  },
+
+  async getClassRecordings(classId: string): Promise<{ recordings: any[] }> {
+    return request(`/classes/${classId}/recordings`);
+  },
+
+  async getAllRecordings(): Promise<{ recordings: any[] }> {
+    return request('/classes/recordings/all');
+  },
+
+  // ─── Remote Moderation API ────────────────────────────────────────────────
+  async muteParticipant(classId: string, targetUserId: string, reason?: string): Promise<{ success: boolean; moderation: any }> {
+    return request(`/classes/${classId}/moderation/mute-participant`, {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId, reason }),
+    });
+  },
+
+  async unmuteParticipant(classId: string, targetUserId: string): Promise<{ success: boolean }> {
+    return request(`/classes/${classId}/moderation/unmute-participant`, {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId }),
+    });
+  },
+
+  async getClassModeration(classId: string): Promise<{ moderations: Record<string, any>; isUserMutedByModerator: boolean; myModeration: any | null }> {
+    return request(`/classes/${classId}/moderation`);
+  },
+
   // ─── Classroom AI Chat ────────────────────────────────────────────────────
   // Server derives user identity from cookie — body only needs classId + message
   async sendClassroomMessage(

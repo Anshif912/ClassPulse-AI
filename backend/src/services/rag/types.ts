@@ -97,13 +97,18 @@ export interface RAGDiagnostics {
   retrievalQuery: string;
   detectedLanguage: LanguageCode;
   embeddingProvider?: string;
+  embeddingModel?: string;
   bm25TopCandidates: Array<{ chunkId: string; page: number; score: number }>;
   vectorTopCandidates: Array<{ chunkId: string; page: number; score: number }>;
   rrfCandidates: Array<{ chunkId: string; page: number; score: number }>;
   mmrSelectedChunks: Array<{ chunkId: string; page: number }>;
+  rerankerProvider?: string;
+  rerankerModel?: string;
   rerankScores: Array<{ chunkId: string; page: number; score: number; state: EvidenceState }>;
   finalSelectedChunks: Array<{ chunkId: string; title: string; page: number; snippet: string; text?: string }>;
   evidenceState: EvidenceState;
+  llmProvider?: string;
+  llmModel?: string;
   latency: RAGLatencyMetrics;
 }
 

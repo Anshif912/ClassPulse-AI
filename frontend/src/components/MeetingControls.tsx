@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Mic,
   MicOff,
@@ -7,13 +7,15 @@ import {
   Monitor,
   MonitorOff,
   Users,
-  PhoneOff,
   Sparkles,
   MoreHorizontal,
-  Bot,
   Copy,
   Check,
   Info,
+  Disc,
+  Square,
+  Lock,
+  Loader2,
 } from 'lucide-react';
 import { ConnectionState } from 'agora-rtc-sdk-ng';
 
@@ -26,9 +28,15 @@ interface MeetingControlsProps {
   participantCount: number;
   connectionState: ConnectionState;
   networkQuality?: any;
+  isTeacher?: boolean;
+  isRecording?: boolean;
+  recordingDuration?: number;
+  isRecordingLoading?: boolean;
+  isMutedByModerator?: boolean;
   onToggleMic: () => void;
   onToggleCamera: () => void;
   onToggleScreenShare: () => void;
+  onToggleRecording?: () => void;
   onToggleAIPanel: () => void;
   onToggleParticipantsPanel: () => void;
   onLeave: () => void;
@@ -44,9 +52,15 @@ export function MeetingControls({
   participantCount,
   connectionState,
   networkQuality,
+  isTeacher = false,
+  isRecording = false,
+  recordingDuration = 0,
+  isRecordingLoading = false,
+  isMutedByModerator = false,
   onToggleMic,
   onToggleCamera,
   onToggleScreenShare,
+  onToggleRecording,
   onToggleAIPanel,
   onToggleParticipantsPanel,
   onLeave,
@@ -55,31 +69,60 @@ export function MeetingControls({
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Format seconds to mm:ss
+  const formatTimer = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div
       className="pb-4 pt-2 flex items-center justify-center shrink-0 z-30"
       role="toolbar"
       aria-label="Meeting controls"
     >
-      {/* ── Centered Floating Control Dock (Panel 3 Reference) ───────────────── */}
-      <div className="flex items-center gap-4 px-6 py-3 rounded-full bg-slate-950/90 border border-slate-800/90 backdrop-blur-2xl shadow-2xl relative z-30 pointer-events-auto">
+      {/* ── Centered Floating Control Dock ─────────────────────────────────── */}
+      <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full bg-slate-950/90 border border-slate-800/90 backdrop-blur-2xl shadow-2xl relative z-30 pointer-events-auto">
         {/* 1. Classroom Mic */}
         <div className="flex flex-col items-center gap-1">
           <button
             data-testid="meeting-mic"
             onClick={onToggleMic}
-            disabled={disabled}
-            aria-label={isMicOn ? 'Mute room microphone' : 'Unmute room microphone'}
-            title={isMicOn ? 'Mute Mic' : 'Unmute Mic'}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer disabled:opacity-40 ${
-              isMicOn
+            disabled={disabled || isMutedByModerator}
+            aria-label={
+              isMutedByModerator
+                ? 'Muted by teacher'
+                : isMicOn
+                ? 'Mute room microphone'
+                : 'Unmute room microphone'
+            }
+            title={
+              isMutedByModerator
+                ? 'Muted by teacher (Microphone locked)'
+                : isMicOn
+                ? 'Mute Mic'
+                : 'Unmute Mic'
+            }
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer disabled:opacity-50 relative ${
+              isMutedByModerator
+                ? 'bg-amber-950/80 border border-amber-700 text-amber-300 cursor-not-allowed'
+                : isMicOn
                 ? 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
                 : 'bg-rose-950/70 border border-rose-700 text-rose-300 hover:bg-rose-900/70'
             }`}
           >
-            {isMicOn ? <Mic className="w-5 h-5 text-slate-200" /> : <MicOff className="w-5 h-5 text-rose-400" />}
+            {isMutedByModerator ? (
+              <Lock className="w-4 h-4 text-amber-400" />
+            ) : isMicOn ? (
+              <Mic className="w-5 h-5 text-slate-200" />
+            ) : (
+              <MicOff className="w-5 h-5 text-rose-400" />
+            )}
           </button>
-          <span className="text-[10px] font-medium text-slate-400">{isMicOn ? 'Mic' : 'Muted'}</span>
+          <span className="text-[10px] font-medium text-slate-400">
+            {isMutedByModerator ? 'Locked' : isMicOn ? 'Mic' : 'Muted'}
+          </span>
         </div>
 
         {/* 2. Video Camera */}
@@ -108,7 +151,7 @@ export function MeetingControls({
             onClick={onToggleScreenShare}
             disabled={disabled}
             aria-label={isScreenSharing ? 'Stop screen share' : 'Share screen'}
-            title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
+            title={isScreenSharing ? 'Stop sharing' : 'Share screen with audio'}
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer disabled:opacity-40 ${
               isScreenSharing
                 ? 'bg-purple-600/30 border border-purple-500 text-purple-200 shadow-md shadow-purple-600/25'
@@ -120,7 +163,49 @@ export function MeetingControls({
           <span className="text-[10px] font-medium text-slate-400">{isScreenSharing ? 'Stop' : 'Share'}</span>
         </div>
 
-        {/* 4. Participants */}
+        {/* 4. Agora Cloud Recording Button (Teacher: Start/Stop; Student: Indicator) */}
+        {isTeacher && onToggleRecording && (
+          <div className="flex flex-col items-center gap-1">
+            <button
+              data-testid="meeting-record"
+              onClick={onToggleRecording}
+              disabled={disabled || isRecordingLoading}
+              aria-label={isRecording ? 'Stop Cloud Recording' : 'Start Cloud Recording'}
+              title={isRecording ? 'Stop Cloud Recording' : 'Start Agora Cloud Recording'}
+              className={`h-11 px-3.5 rounded-full flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
+                isRecording
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-400/40 animate-pulse'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+              }`}
+            >
+              {isRecordingLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              ) : isRecording ? (
+                <>
+                  <Square className="w-4 h-4 fill-white" />
+                  <span className="text-xs font-bold text-white tracking-wide">
+                    {formatTimer(recordingDuration)}
+                  </span>
+                </>
+              ) : (
+                <Disc className="w-5 h-5 text-rose-400" />
+              )}
+            </button>
+            <span className="text-[10px] font-medium text-slate-400">
+              {isRecording ? 'Recording' : 'Record'}
+            </span>
+          </div>
+        )}
+
+        {/* Student Recording Indicator */}
+        {!isTeacher && isRecording && (
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-950/80 border border-rose-600/50 rounded-full text-rose-300 text-xs font-bold shadow-md animate-pulse">
+            <Disc className="w-3.5 h-3.5 text-rose-400" />
+            <span>REC {formatTimer(recordingDuration)}</span>
+          </div>
+        )}
+
+        {/* 5. Participants */}
         <div className="flex flex-col items-center gap-1">
           <button
             data-testid="meeting-participants"
@@ -135,10 +220,10 @@ export function MeetingControls({
           >
             <Users className="w-5 h-5 text-slate-300" />
           </button>
-          <span className="text-[10px] font-medium text-slate-400">Participants</span>
+          <span className="text-[10px] font-medium text-slate-400">Roster</span>
         </div>
 
-        {/* 5. DEDICATED AI TUTOR BUTTON (Panel 3: Purple/Magenta Gradient Orb with Star Icon ✦) */}
+        {/* 6. DEDICATED AI TUTOR BUTTON */}
         <div className="flex flex-col items-center gap-1">
           <button
             data-testid="meeting-ai"
@@ -156,7 +241,7 @@ export function MeetingControls({
           <span className="text-[10px] font-bold text-purple-400">AI Tutor</span>
         </div>
 
-        {/* 6. More Options with Functional Popover Menu */}
+        {/* 7. More Options with Popover Menu */}
         <div className="flex flex-col items-center gap-1 relative">
           <button
             data-testid="meeting-more"

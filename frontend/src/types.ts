@@ -281,3 +281,54 @@ export interface ClassroomEvent {
   timestamp: string;
   message: string;
 }
+
+// ─── Agora Cloud Recording Types ──────────────────────────────────────────────
+export interface RecordingFile {
+  filename: string;
+  trackType: string;
+  url?: string;
+  sliceStartTime?: number;
+  fileSize?: number;
+}
+
+export interface RecordingSession {
+  id: string;
+  classId: string;
+  meetingSessionId?: string;
+  resourceId: string;
+  sid: string;
+  agoraChannel: string;
+  recordingUid: number;
+  startedAt: string;
+  stoppedAt?: string;
+  durationSeconds?: number;
+  status: 'STARTING' | 'RECORDING' | 'STOPPED' | 'FAILED';
+  fileList?: RecordingFile[];
+  storageMode?: 's3' | 'oss' | 'gcs' | 'local_mock';
+  serverUrl?: string;
+  error?: string;
+}
+
+// ─── Moderation State ────────────────────────────────────────────────────────
+export interface ModerationRecord {
+  userId: string;
+  agoraUid?: number;
+  isMuted: boolean;
+  mutedBy: string;
+  mutedByName?: string;
+  mutedAt: string;
+  reason?: string;
+}
+
+// ─── Latency Metrics (7-Stage Tracking) ───────────────────────────────────────
+export interface LatencyMetrics {
+  micCapturedAt?: number;
+  rtcPublishAt?: number;
+  agentReceiveAt?: number;
+  transcriptAt?: number;
+  llmStartAt?: number;
+  firstAudioGeneratedAt?: number;
+  audioPlaybackAt?: number;
+  totalRoundtripMs?: number;
+}
+
