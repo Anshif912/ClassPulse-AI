@@ -5,6 +5,7 @@ import { PdfService } from '../services/pdf.service';
 import { SemanticChunker } from '../services/rag/chunker';
 import { EmbeddingService } from '../services/rag/embeddingService';
 import { ragRepository } from '../services/rag/ragRepository';
+import { insightsService } from '../services/insights.service';
 import {
   requireAuth,
   requireTeacher,
@@ -18,6 +19,17 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB max
   storage: multer.memoryStorage(),
 });
+
+// ─── GET /api/classes/insights/summary ───────────────────────────────────────
+// Teacher-only: aggregate meeting analytics across all teacher's classrooms.
+router.get('/insights/summary',
+  requireAuth,
+  requireTeacher,
+  (req: Request, res: Response): void => {
+    const overview = insightsService.generateTeacherOverview(req.user!.id);
+    res.json(overview);
+  }
+);
 
 // ─── POST /api/classes/create ─────────────────────────────────────────────────
 // Teacher-only: creates a new classroom.
@@ -207,6 +219,42 @@ router.post('/:classId/end-session',
       startedAt: session.startedAt,
       endedAt: session.endedAt,
       status: session.status,
+    });
+  }
+);
+
+// ─── DELETE /api/classes/:classId ───────────────────────────────────────────
+// Teacher-only + ownership check: deletes classroom, associated memberships, sessions, materials, and RAG chunks.
+router.delete('/:classId',
+  requireAuth,
+  requireTeacherOwnership(),
+  (req: Request, res: Response): void => {
+    const classId = req.params.classId.toUpperCase();
+    const classroom = dbService.getClassroom(classId);
+
+    if (!classroom) {
+      res.status(404).json({ error: `Classroom "${classId}" not found.` });
+      return;
+    }
+
+    // Purge all materials from RAG repository
+    if (classroom.materials) {
+      for (const mat of classroom.materials) {
+        ragRepository.removeMaterial(classId, mat.id);
+      }
+    }
+
+    const deleted = dbService.deleteClassroom(classId, req.user!.id);
+    if (!deleted) {
+      res.status(403).json({ error: 'You are not authorized to delete this classroom.' });
+      return;
+    }
+
+    console.log(`[CLASS_DELETED] id=${classId} teacher=${req.user!.email}`);
+
+    res.json({
+      success: true,
+      message: `Classroom "${classroom.name}" (${classId}) and all associated materials were permanently deleted.`,
     });
   }
 );
@@ -467,6 +515,18 @@ router.get('/:classId/members',
       })),
       total: members.length,
     });
+  }
+);
+
+// ─── GET /api/classes/:classId/insights ─────────────────────────────────────
+// Teacher-only: detailed meeting analytics, topics covered, and past session history.
+router.get('/:classId/insights',
+  requireAuth,
+  requireTeacherOwnership(),
+  (req: Request, res: Response): void => {
+    const classId = req.params.classId.toUpperCase();
+    const analytics = insightsService.generateClassroomAnalytics(classId);
+    res.json(analytics);
   }
 );
 

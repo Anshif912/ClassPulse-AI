@@ -678,6 +678,7 @@ export function useAgoraRTC({
 
       await clientRef.current.publish(screenVideo);
       setIsScreenSharing(true);
+      if (localParticipant) setLocalParticipant({ ...localParticipant, hasVideo: true });
       soundManager.play('screen_share_start');
 
       const myName = localParticipant?.name || localNameRef.current || 'Presenter';

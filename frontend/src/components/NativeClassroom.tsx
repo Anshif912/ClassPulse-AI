@@ -63,8 +63,24 @@ export function NativeClassroom({
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [isParticipantsPanelOpen, setIsParticipantsPanelOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'grid' | 'speaker'>('grid');
   const [rtcError, setRtcError] = useState<string | null>(null);
   const sessionTimer = useSessionTimer();
+
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  const handleToggleLayout = useCallback(() => {
+    setLayoutMode((prev) => (prev === 'grid' ? 'speaker' : 'grid'));
+  }, []);
 
   // Agora RTC
   const {
@@ -170,17 +186,25 @@ export function NativeClassroom({
         {/* Right: Layout actions & Leave button */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {}}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Toggle fullscreen"
+            onClick={handleToggleFullscreen}
+            className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+              isFullscreen
+                ? 'bg-blue-600/30 border-blue-500 text-blue-300'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             <Maximize2 className="w-4 h-4" />
           </button>
 
           <button
-            onClick={() => {}}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Gallery view"
+            onClick={handleToggleLayout}
+            className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+              layoutMode === 'speaker'
+                ? 'bg-purple-600/30 border-purple-500 text-purple-300'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title={layoutMode === 'speaker' ? 'Switch to Gallery Grid' : 'Switch to Active Speaker View'}
           >
             <Grid className="w-4 h-4" />
           </button>
@@ -219,6 +243,7 @@ export function NativeClassroom({
               activeSpeakerUid={activeSpeakerUid}
               screenShareUid={isScreenSharing ? effectiveUid : undefined}
               screenTrack={screenTrack}
+              layoutMode={layoutMode}
               className="h-full w-full"
             />
           ) : (

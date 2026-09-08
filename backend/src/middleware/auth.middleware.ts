@@ -104,7 +104,13 @@ export function requireTeacherOwnership(classIdParam: string = 'classId') {
       return;
     }
 
-    if (classroom.teacherId !== req.user.id) {
+    const isOwner =
+      classroom.teacherId === req.user.id ||
+      (classroom.teacherEmail &&
+        req.user.email &&
+        classroom.teacherEmail.toLowerCase() === req.user.email.toLowerCase());
+
+    if (!isOwner) {
       res.status(403).json({ error: 'Only the classroom teacher can perform this action.' });
       return;
     }

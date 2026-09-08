@@ -182,10 +182,13 @@ export class RAGPipeline {
     metrics.totalMs = Date.now() - startTime;
 
     // ─── Diagnostics Trace ────────────────────────────────────────────────────
+    const embeddingInfo = EmbeddingService.getActiveConfigInfo();
     const diagnostics: RAGDiagnostics = {
       originalQuery: transformation.originalQuery,
+      normalizedQuery: transformation.normalizedQuery,
       retrievalQuery: transformation.retrievalQuery,
       detectedLanguage: transformation.detectedLanguage,
+      embeddingProvider: embeddingInfo.isRealOpenAI ? 'OpenAI text-embedding-3-large' : 'ClassPulse Deterministic Vectorizer (Development/Test Mode)',
       bm25TopCandidates: lexicalCandidates.slice(0, 5).map((c) => ({
         chunkId: c.chunk.metadata.chunkId,
         page: c.chunk.metadata.pageStart,
@@ -276,13 +279,13 @@ export class RAGPipeline {
   ): Promise<string> {
     const apiKey = config.gemini.apiKey.trim();
     if (!apiKey) return '';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     const prompt = contextText
       ? `${systemPrompt}\n\n<course_material>\n${contextText}\n</course_material>\n\nStudent Question: ${userQuery}`
       : `${systemPrompt}\n\nStudent Question: ${userQuery}`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
 
     try {
       const response = await fetch(url, {

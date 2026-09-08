@@ -12,6 +12,7 @@ interface ParticipantGridProps {
   activeSpeakerUid: UID | null;
   screenShareUid?: UID | null;
   screenTrack?: any;
+  layoutMode?: 'grid' | 'speaker';
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export function ParticipantGrid({
   activeSpeakerUid,
   screenShareUid,
   screenTrack,
+  layoutMode = 'grid',
   className = '',
 }: ParticipantGridProps) {
   // Ordered participant list: local first, then remote participants sorted by active speaker / teacher
@@ -157,6 +159,46 @@ export function ParticipantGrid({
           localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
           className="w-full h-full max-h-full"
         />
+      </div>
+    );
+  }
+
+  // ── CASE: Speaker Focus Mode Explicitly Selected ───────────────────────────
+  if (layoutMode === 'speaker') {
+    const mainEntry = allEntries.find((e) => e.uid === activeSpeakerUid) ?? allEntries[0];
+    const filmstripEntries = allEntries.filter((e) => e.uid !== mainEntry.uid).slice(0, FILMSTRIP_MAX);
+
+    return (
+      <div className={`flex flex-col h-full w-full gap-3 ${className}`}>
+        {/* Promoted Main Stage */}
+        <div className="flex-1 min-h-0">
+          <ParticipantTile
+            key={String(mainEntry.uid)}
+            uid={mainEntry.uid}
+            participant={mainEntry.participant}
+            remoteUser={mainEntry.remoteUser}
+            isActiveSpeaker={mainEntry.uid === activeSpeakerUid}
+            isLocal={mainEntry.isLocal}
+            localVideoTrack={mainEntry.isLocal ? localVideoTrack : undefined}
+            className="w-full h-full"
+          />
+        </div>
+
+        {/* Filmstrip Strip */}
+        <div className="h-28 shrink-0 flex gap-2.5 overflow-x-auto pb-1">
+          {filmstripEntries.map((entry) => (
+            <ParticipantTile
+              key={String(entry.uid)}
+              uid={entry.uid}
+              participant={entry.participant}
+              remoteUser={entry.remoteUser}
+              isActiveSpeaker={entry.uid === activeSpeakerUid}
+              isLocal={entry.isLocal}
+              localVideoTrack={entry.isLocal ? localVideoTrack : undefined}
+              className="w-40 h-full shrink-0"
+            />
+          ))}
+        </div>
       </div>
     );
   }

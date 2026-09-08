@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Mic,
   MicOff,
@@ -11,6 +11,9 @@ import {
   Sparkles,
   MoreHorizontal,
   Bot,
+  Copy,
+  Check,
+  Info,
 } from 'lucide-react';
 import { ConnectionState } from 'agora-rtc-sdk-ng';
 
@@ -49,6 +52,9 @@ export function MeetingControls({
   onLeave,
   disabled = false,
 }: MeetingControlsProps) {
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
   return (
     <div
       className="pb-4 pt-2 flex items-center justify-center shrink-0 z-30"
@@ -150,17 +156,61 @@ export function MeetingControls({
           <span className="text-[10px] font-bold text-purple-400">AI Tutor</span>
         </div>
 
-        {/* 6. More Options */}
-        <div className="flex flex-col items-center gap-1">
+        {/* 6. More Options with Functional Popover Menu */}
+        <div className="flex flex-col items-center gap-1 relative">
           <button
-            onClick={() => {}}
+            data-testid="meeting-more"
+            onClick={() => setIsMoreOpen((v) => !v)}
             aria-label="More options"
             title="More options"
-            className="w-11 h-11 rounded-full flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all active:scale-95 cursor-pointer"
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer ${
+              isMoreOpen
+                ? 'bg-slate-700 text-white border border-slate-600 shadow-md'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+            }`}
           >
             <MoreHorizontal className="w-5 h-5" />
           </button>
           <span className="text-[10px] font-medium text-slate-400">More</span>
+
+          {/* Popover Menu */}
+          {isMoreOpen && (
+            <div
+              className="absolute bottom-full mb-3 right-0 w-56 bg-slate-900/95 border border-slate-700/90 rounded-2xl shadow-2xl p-2 z-50 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 space-y-1 text-xs"
+              role="menu"
+            >
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2500);
+                  setIsMoreOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left font-medium"
+              >
+                {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
+                <span>{copiedLink ? 'Link Copied!' : 'Copy Classroom Link'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onToggleParticipantsPanel();
+                  setIsMoreOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left font-medium"
+              >
+                <Users className="w-4 h-4 text-blue-400" />
+                <span>Roster ({participantCount})</span>
+              </button>
+
+              <div className="h-px bg-slate-800 my-1" />
+
+              <div className="px-3 py-1.5 text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                <Info className="w-3 h-3 text-slate-500" />
+                <span>Agora RTC 4.x Active</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -29,6 +29,9 @@ const FOLLOW_UP_PATTERNS = [
   /^ek\s+example\s+do/i,
   /^kaun\s+sa\s+(tez|fast|accha|operating\s+system)\s+tha/i,
   /\b(kahan\s+use|use\s+kahan|kyon\s+the|itne\s+bade|itne\s+garam|kab\s+badli)\b/i,
+  // Comparative follow-up patterns (English, Tanglish, Tamil, Hindi, Hinglish)
+  /\b(compare|comparison|versus|vs\.?|difference|ஒப்பீடு|வேறுபாடு|வித்தியாசம்|तुलना|अंतर)\b/i,
+  /\b(oda\s+compare|kooda\s+compare|se\s+compare|se\s+tulna|ke\s+saath\s+tulna)\b/i,
 ];
 
 // Multilingual technical term mapping for course knowledge alignment
@@ -88,6 +91,7 @@ export class QueryTransformer {
     ) {
       return {
         originalQuery,
+        normalizedQuery: originalQuery,
         retrievalQuery: originalQuery,
         detectedLanguage,
         intent: preliminaryIntent.intent,
@@ -98,10 +102,10 @@ export class QueryTransformer {
     }
 
     let isFollowUp = false;
-    let retrievalQuery = originalQuery;
+    let normalizedQuery = originalQuery;
     let resolvedSubject = '';
 
-    // 2. Multi-turn Follow-up Resolution
+    // 2. Multi-turn Follow-up Resolution & Anaphora
     const isFollowUpMatch = FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(originalQuery));
     if ((isFollowUpMatch || originalQuery.split(/\s+/).length <= 4) && recentStudentQuestions.length > 0) {
       isFollowUp = true;
@@ -127,16 +131,16 @@ export class QueryTransformer {
       }
 
       if (resolvedSubject.length > 0 && !originalQuery.toLowerCase().includes(resolvedSubject.toLowerCase())) {
-        retrievalQuery = `${resolvedSubject} ${originalQuery}`;
+        normalizedQuery = `${resolvedSubject} - ${originalQuery}`;
       }
     }
 
     // 3. Technical normalization for English course document retrieval
-    let normalizedForRetrieval = retrievalQuery;
+    let retrievalQuery = normalizedQuery;
     for (const item of TRANSLATION_MAP) {
       item.regex.lastIndex = 0;
-      if (item.regex.test(normalizedForRetrieval)) {
-        normalizedForRetrieval = `${normalizedForRetrieval} ${item.replacement}`;
+      if (item.regex.test(retrievalQuery)) {
+        retrievalQuery = `${retrievalQuery} ${item.replacement}`;
       }
     }
 
@@ -147,11 +151,12 @@ export class QueryTransformer {
     );
 
     // 5. Expansions
-    const expandedVariants = this.generateExpansions(normalizedForRetrieval, detectedLanguage);
+    const expandedVariants = this.generateExpansions(retrievalQuery, detectedLanguage);
 
     return {
       originalQuery,
-      retrievalQuery: normalizedForRetrieval,
+      normalizedQuery,
+      retrievalQuery,
       detectedLanguage,
       intent,
       targetEntities,

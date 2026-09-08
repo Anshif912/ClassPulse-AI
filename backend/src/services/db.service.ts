@@ -383,6 +383,72 @@ class DatabaseService {
     return Object.values(this.data.classrooms);
   }
 
+  public deleteClassroom(classId: string, teacherId: string): boolean {
+    const upperClassId = classId.toUpperCase();
+    const cls = this.data.classrooms[upperClassId];
+    if (!cls) return false;
+
+    const user = this.data.users[teacherId];
+    const isOwner =
+      cls.teacherId === teacherId ||
+      (user && cls.teacherEmail && user.email && cls.teacherEmail.toLowerCase() === user.email.toLowerCase());
+
+    if (!isOwner) return false;
+
+    // 1. Remove classroom record
+    delete this.data.classrooms[upperClassId];
+
+    // 2. Remove memberships
+    for (const [id, m] of Object.entries(this.data.memberships)) {
+      if (m.classId.toUpperCase() === upperClassId) {
+        delete this.data.memberships[id];
+      }
+    }
+
+    // 3. Remove meeting sessions
+    for (const [id, s] of Object.entries(this.data.meetingSessions)) {
+      if (s.classId.toUpperCase() === upperClassId) {
+        delete this.data.meetingSessions[id];
+      }
+    }
+
+    // 4. Remove attendance records
+    for (const [id, a] of Object.entries(this.data.attendance)) {
+      if (a.classId.toUpperCase() === upperClassId) {
+        delete this.data.attendance[id];
+      }
+    }
+
+    // 5. Remove materials and material chunks
+    for (const [id, mat] of Object.entries(this.data.materials)) {
+      if (mat.classId.toUpperCase() === upperClassId) {
+        delete this.data.materials[id];
+      }
+    }
+    for (const [id, chunk] of Object.entries(this.data.materialChunks)) {
+      if (chunk.classId.toUpperCase() === upperClassId) {
+        delete this.data.materialChunks[id];
+      }
+    }
+
+    // 6. Remove conversations and AI messages
+    const convIdsToRemove = new Set<string>();
+    for (const [id, c] of Object.entries(this.data.conversations)) {
+      if (c.classId.toUpperCase() === upperClassId) {
+        convIdsToRemove.add(id);
+        delete this.data.conversations[id];
+      }
+    }
+    for (const [id, m] of Object.entries(this.data.aiMessages)) {
+      if (convIdsToRemove.has(m.conversationId)) {
+        delete this.data.aiMessages[id];
+      }
+    }
+
+    this.persist();
+    return true;
+  }
+
   public getClassroomsForUser(userId: string): Classroom[] {
     const userMemberships = Object.values(this.data.memberships).filter(
       (m) => m.userId === userId && m.status === 'active'
@@ -524,6 +590,27 @@ class DatabaseService {
     return Object.values(this.data.attendance).filter(
       (a) => a.classId.toUpperCase() === classId.toUpperCase()
     );
+  }
+
+  public getClassMeetingSessions(classId: string): MeetingSession[] {
+    const upper = classId.toUpperCase();
+    return Object.values(this.data.meetingSessions)
+      .filter((s) => s.classId.toUpperCase() === upper)
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  }
+
+  public getClassConversations(classId: string): AIConversation[] {
+    const upper = classId.toUpperCase();
+    return Object.values(this.data.conversations).filter(
+      (c) => c.classId.toUpperCase() === upper
+    );
+  }
+
+  public getMessagesForClass(classId: string): AIMessage[] {
+    const convIds = new Set(this.getClassConversations(classId).map((c) => c.id));
+    return Object.values(this.data.aiMessages)
+      .filter((m) => convIds.has(m.conversationId))
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
 
   // ─── Active Classroom Roster (Authoritative Agora UID -> User Identity) ────

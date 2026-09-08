@@ -69,6 +69,7 @@ export type UserIntent =
 
 export interface QueryTransformation {
   originalQuery: string;
+  normalizedQuery: string;
   retrievalQuery: string;
   detectedLanguage: LanguageCode;
   intent: UserIntent;
@@ -92,14 +93,16 @@ export interface RAGLatencyMetrics {
 
 export interface RAGDiagnostics {
   originalQuery: string;
+  normalizedQuery: string;
   retrievalQuery: string;
   detectedLanguage: LanguageCode;
+  embeddingProvider?: string;
   bm25TopCandidates: Array<{ chunkId: string; page: number; score: number }>;
   vectorTopCandidates: Array<{ chunkId: string; page: number; score: number }>;
   rrfCandidates: Array<{ chunkId: string; page: number; score: number }>;
   mmrSelectedChunks: Array<{ chunkId: string; page: number }>;
   rerankScores: Array<{ chunkId: string; page: number; score: number; state: EvidenceState }>;
-  finalSelectedChunks: Array<{ chunkId: string; title: string; page: number; snippet: string }>;
+  finalSelectedChunks: Array<{ chunkId: string; title: string; page: number; snippet: string; text?: string }>;
   evidenceState: EvidenceState;
   latency: RAGLatencyMetrics;
 }

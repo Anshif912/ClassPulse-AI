@@ -255,8 +255,28 @@ export const api = {
     return request(`/classes/${classId}/materials`);
   },
 
+  async deleteClass(classId: string): Promise<{ success: boolean; message: string }> {
+    return request<{ success: boolean; message: string }>(`/classes/${classId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async deleteMaterial(classId: string, materialId: string): Promise<{ success: boolean; message: string }> {
+    return request<{ success: boolean; message: string }>(`/classes/${classId}/materials/${materialId}`, {
+      method: 'DELETE',
+    });
+  },
+
   async getClassAttendance(classId: string): Promise<{ records: any[]; totalParticipants: number }> {
     return request(`/classes/${classId}/attendance`);
+  },
+
+  async getClassInsights(classId: string): Promise<any> {
+    return request(`/classes/${classId}/insights`);
+  },
+
+  async getAllInsightsSummary(): Promise<any> {
+    return request('/classes/insights/summary');
   },
 
   // ─── Classroom AI Chat ────────────────────────────────────────────────────

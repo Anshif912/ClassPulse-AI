@@ -290,6 +290,10 @@ export function AIClassroomPanel({
             ]);
           }
         },
+        onLatencyUpdate: (metrics) => {
+          if (!isMountedRef.current) return;
+          console.log(`[VOICE LATENCY] Total End-to-End: ${metrics.totalLatencyMs}ms`);
+        },
         onPipelineChange: (pipeline) => {
           if (!isMountedRef.current) return;
           if (pipeline === 'fallback') {
@@ -352,7 +356,7 @@ export function AIClassroomPanel({
           setVoiceState('unsupported');
           setAgentDiagnostics((prev) => ({ ...prev, sessionStatus: 'Unavailable' }));
         },
-      });
+      }, selectedLang);
     } catch (err: any) {
       soundManager.play('ai_error');
       setError(err.message || 'Could not start Agora Voice Agent.');
