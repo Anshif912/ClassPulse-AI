@@ -301,7 +301,7 @@ export function StudentDashboard() {
                     {activeLiveClass.name}
                   </h2>
                   <p className="text-xs sm:text-sm text-[#94A3B8] font-medium mt-1">
-                    Teacher: <strong className="text-slate-200">{activeLiveClass.teacherName || 'James (Teacher)'}</strong> • Unit 1: Generations & Architecture
+                    Teacher: <strong className="text-slate-200">{activeLiveClass.teacherName || 'Instructor'}</strong> • {activeLiveClass.subject}
                   </p>
                 </div>
 
@@ -434,7 +434,7 @@ export function StudentDashboard() {
                         </div>
 
                         <p className="text-xs text-[#8E9BB5] font-medium">
-                          {cls.teacherName || 'James'}
+                          {cls.teacherName || 'Instructor'}
                         </p>
 
                         <div className="space-y-1 text-xs text-[#64748B] pt-1">
@@ -657,37 +657,30 @@ export function StudentDashboard() {
               </div>
 
               <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                <div className="p-4 rounded-2xl bg-[#060914] border border-[#1E2A52] flex items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-white flex items-center gap-2">
-                      <FileCheck className="w-4 h-4 text-emerald-400" />
-                      Generations of Computers - Lecture Notes.pdf
-                    </p>
-                    <p className="text-xs text-slate-400">Uploaded by James • Indexed by ClassPulse AI (12 Chunks)</p>
-                  </div>
-                  <button
-                    onClick={() => setIsAITutorOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-300 hover:bg-purple-600/30 text-xs font-semibold shrink-0"
-                  >
-                    Ask AI about PDF
-                  </button>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#060914] border border-[#1E2A52] flex items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-white flex items-center gap-2">
-                      <FileCheck className="w-4 h-4 text-emerald-400" />
-                      Computer Architecture Reference Guide.pdf
-                    </p>
-                    <p className="text-xs text-slate-400">Unit 1 Supplementary Reading • 24 pages</p>
-                  </div>
-                  <button
-                    onClick={() => setIsAITutorOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-300 hover:bg-purple-600/30 text-xs font-semibold shrink-0"
-                  >
-                    Ask AI about PDF
-                  </button>
-                </div>
+                {classrooms.length === 0 ? (
+                  <p className="text-xs text-slate-400 p-4 text-center">No classroom materials available yet. Join a classroom to access course PDFs.</p>
+                ) : (
+                  classrooms.map((cls) => (
+                    <div key={cls.classId} className="p-4 rounded-2xl bg-[#060914] border border-[#1E2A52] flex items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-white flex items-center gap-2">
+                          <FileCheck className="w-4 h-4 text-emerald-400" />
+                          {cls.name} — Lecture Notes & Study Guide
+                        </p>
+                        <p className="text-xs text-slate-400">Teacher: {cls.teacherName || 'Instructor'} • Subject: {cls.subject} ({cls.materialCount || 1} indexed)</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsMaterialsOpen(false);
+                          setIsAITutorOpen(true);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-300 hover:bg-purple-600/30 text-xs font-semibold shrink-0 cursor-pointer"
+                      >
+                        Ask AI Tutor
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="flex justify-end pt-2 border-t border-[#182344]">

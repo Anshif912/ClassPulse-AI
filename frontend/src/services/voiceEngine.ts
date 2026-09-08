@@ -37,7 +37,6 @@ export class ClassPulseResponsiveVoiceEngine implements IVoiceEngine {
   public readonly name = 'ClassPulse AI Voice (RAG Grounded)';
 
   private recognition: any = null;
-  private synth: SpeechSynthesis | null = typeof window !== 'undefined' ? window.speechSynthesis : null;
   private listener: VoiceEngineListener | null = null;
   private classId: string = '';
   private active = false;
@@ -184,64 +183,17 @@ export class ClassPulseResponsiveVoiceEngine implements IVoiceEngine {
   }
 
   private speakText(text: string, onDone?: () => void): void {
-    if (!text || typeof window === 'undefined' || !this.synth) {
-      onDone?.();
-      return;
-    }
-
-    try {
-      this.synth.cancel();
-      this.speaking = true;
-      this.listener?.onStateChange?.('SPEAKING');
-      this.listener?.onSpeechStart?.();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-
-      const voices = this.synth.getVoices();
-      const preferred =
-        voices.find(
-          (v) =>
-            (v.name.includes('Natural') ||
-              v.name.includes('Google') ||
-              v.name.includes('Samantha') ||
-              v.name.includes('Jenny') ||
-              v.name.includes('Zira')) &&
-            (v.lang.startsWith('en') || v.lang.startsWith('ta'))
-        ) || voices.find((v) => v.lang.startsWith('en'));
-
-      if (preferred) {
-        utterance.voice = preferred;
-      }
-
-      utterance.onend = () => {
-        this.speaking = false;
-        this.listener?.onSpeechEnd?.();
-        onDone?.();
-      };
-
-      utterance.onerror = () => {
-        this.speaking = false;
-        this.listener?.onSpeechEnd?.();
-        onDone?.();
-      };
-
-      this.synth.speak(utterance);
-    } catch {
-      this.speaking = false;
-      onDone?.();
-    }
+    // Browser speechSynthesis is completely removed per production voice architecture.
+    // Conversational AI voice is streamed directly over Agora RTC channel 9999.
+    this.speaking = false;
+    this.listener?.onSpeechEnd?.();
+    onDone?.();
   }
 
   public async interrupt(classId: string): Promise<void> {
-    if (this.synth) {
-      try {
-        this.synth.cancel();
-      } catch {}
-    }
     this.speaking = false;
     this.isProcessingTurn = false;
+    this.listener?.onSpeechEnd?.();
     this.listener?.onStateChange?.('INTERRUPTED');
     setTimeout(() => {
       if (this.active) {
@@ -272,11 +224,6 @@ export class ClassPulseResponsiveVoiceEngine implements IVoiceEngine {
         this.recognition.abort();
       } catch {}
       this.recognition = null;
-    }
-    if (this.synth) {
-      try {
-        this.synth.cancel();
-      } catch {}
     }
     this.listener = null;
   }

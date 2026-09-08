@@ -46,8 +46,9 @@ export function TeacherDashboard() {
   const [myClasses, setMyClasses] = useState<Classroom[]>([]);
   const [isLoadingClasses, setIsLoadingClasses] = useState(true);
 
-  // Material upload state
+  // Material upload & dynamic list state
   const [selectedClassId, setSelectedClassId] = useState('');
+  const [classMaterials, setClassMaterials] = useState<any[]>([]);
   const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
   const [pdfTitle, setPdfTitle] = useState('');
   const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
@@ -66,6 +67,15 @@ export function TeacherDashboard() {
       .catch(() => setMyClasses([]))
       .finally(() => setIsLoadingClasses(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedClassId) return;
+    api.getClassMaterials(selectedClassId)
+      .then((res: any) => {
+        setClassMaterials(res.materials || []);
+      })
+      .catch(() => setClassMaterials([]));
+  }, [selectedClassId, materialSuccess]);
 
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,10 +181,10 @@ export function TeacherDashboard() {
           {/* Teacher Avatar Pill */}
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#F1F5F9] border border-[#E2E8F0]">
             <div className="w-6 h-6 rounded-full bg-[#16A34A] flex items-center justify-center text-[11px] font-black text-white">
-              {user?.name?.[0]?.toUpperCase() || 'J'}
+              {user?.name?.[0]?.toUpperCase() || 'T'}
             </div>
             <div className="hidden md:block text-left text-xs leading-none">
-              <span className="font-bold text-[#0F172A]">{user?.name || 'James'}</span>
+              <span className="font-bold text-[#0F172A]">{user?.name || 'Teacher'}</span>
               <span className="text-[10px] text-[#64748B] block font-medium">Teacher</span>
             </div>
           </div>
@@ -196,7 +206,7 @@ export function TeacherDashboard() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-[#E2E8F0]">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#0F172A] flex items-center gap-2">
-              Good morning, {user?.name?.split(' ')[0] || 'James'} 👋
+              Good morning, {user?.name?.split(' ')[0] || 'Teacher'} 👋
             </h1>
             <p className="text-xs sm:text-sm text-[#64748B] mt-0.5 font-medium">
               Your teaching workspace at a glance.
@@ -364,23 +374,26 @@ export function TeacherDashboard() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              { name: 'Evolution_of_Computers_From_1st_Generation.pdf', pages: 12, chunks: 48, status: 'AI Ready' },
-              { name: 'Data_Structures_Lecture_Notes_Unit1.pdf', pages: 18, chunks: 64, status: 'AI Ready' },
-              { name: 'Computer_Networks_Protocols_Overview.pdf', pages: 24, chunks: 82, status: 'AI Ready' },
-            ].map((mat, i) => (
-              <div key={i} className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-between">
-                <div className="min-w-0 pr-2">
-                  <p className="text-xs font-bold text-[#0F172A] truncate">{mat.name}</p>
-                  <p className="text-[11px] text-[#64748B]">{mat.pages} pages • {mat.chunks} chunks</p>
+          {classMaterials.length === 0 ? (
+            <div className="p-6 text-center rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
+              <p className="text-xs text-[#64748B]">No PDF documents uploaded yet for this class.</p>
+              <p className="text-[11px] text-[#94A3B8] mt-1">Upload lecture notes or textbooks above to ground the AI Tutor.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {classMaterials.map((mat: any, i: number) => (
+                <div key={mat.materialId || i} className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <p className="text-xs font-bold text-[#0F172A] truncate">{mat.title || mat.filename || mat.name}</p>
+                    <p className="text-[11px] text-[#64748B]">{mat.pageCount || mat.pages || 1} pages • {mat.chunkCount || mat.chunks || 4} chunks</p>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-[#16A34A] shrink-0">
+                    AI Ready
+                  </span>
                 </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-[#16A34A] shrink-0">
-                  {mat.status}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 6. Recent Activity Timeline */}

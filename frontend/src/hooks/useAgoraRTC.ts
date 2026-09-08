@@ -145,6 +145,7 @@ export function useAgoraRTC({
   const localVideoTrackRef = useRef<ICameraVideoTrack | null>(null);
   const localAudioTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
   const screenTrackRef = useRef<ILocalVideoTrack | null>(null);
+  const wasCameraActiveBeforeScreenShareRef = useRef<boolean>(false);
   const isMountedRef = useRef(true);
   const isJoiningRef = useRef(false);
   const lifecycleStateRef = useRef<RtcLifecycleState>('idle');
@@ -273,7 +274,9 @@ export function useAgoraRTC({
       try {
         if (!isMountedRef.current) return;
         if (mediaType === 'video') {
-          await client.setRemoteVideoStreamType(user.uid, 1); // low stream default for smoothness
+          // Subscribe to high-stream (0) for clear presentation & 1-4 users; low-stream (1) only when grid has 5+ users
+          const streamType = remoteUsers.length <= 3 ? 0 : 1;
+          await client.setRemoteVideoStreamType(user.uid, streamType);
         }
 
         await client.subscribe(user, mediaType);
@@ -405,12 +408,12 @@ export function useAgoraRTC({
       );
       if (!isMountedRef.current) return;
 
-      // 4. Create & publish camera video track
+      // 4. Create & publish camera video track (720p HD Adaptive Profile)
       const tracksToPublish: (ICameraVideoTrack | IMicrophoneAudioTrack)[] = [];
       if (initialCameraOnRef.current) {
         try {
           const vTrack = await AgoraRTC.createCameraVideoTrack({
-            encoderConfig: { width: 640, height: 480, frameRate: 24, bitrateMin: 300, bitrateMax: 800 },
+            encoderConfig: { width: 1280, height: 720, frameRate: 24, bitrateMin: 800, bitrateMax: 1500 },
           });
           if (isMountedRef.current) {
             localVideoTrackRef.current = vTrack;
@@ -546,11 +549,14 @@ export function useAgoraRTC({
       } else if (clientRef.current) {
         try {
           const vTrack = await AgoraRTC.createCameraVideoTrack({
-            encoderConfig: { width: 640, height: 480, frameRate: 24 },
+            encoderConfig: { width: 1280, height: 720, frameRate: 24, bitrateMin: 800, bitrateMax: 1500 },
           });
           localVideoTrackRef.current = vTrack;
           setLocalVideoTrack(vTrack);
-          await clientRef.current.publish(vTrack);
+          // Only publish camera track if not currently screen sharing
+          if (!isScreenSharing) {
+            await clientRef.current.publish(vTrack);
+          }
         } catch (e) {
           console.warn('[CAMERA TOGGLE]', e);
         }
@@ -558,7 +564,7 @@ export function useAgoraRTC({
       setIsCameraOn(true);
       if (localParticipant) setLocalParticipant({ ...localParticipant, hasVideo: true });
     }
-  }, [isCameraOn, localParticipant]);
+  }, [isCameraOn, isScreenSharing, localParticipant]);
 
   // ─── Meeting Microphone Toggle (Separated from AI Mic) ───────────────────────
   const toggleMic = useCallback(async () => {
@@ -607,6 +613,20 @@ export function useAgoraRTC({
         screenTrackRef.current = null;
         setScreenTrack(null);
       }
+
+      // Restore camera video track safely if camera was active prior to screen share
+      if (wasCameraActiveBeforeScreenShareRef.current && clientRef.current && localVideoTrackRef.current) {
+        try {
+          await clientRef.current.publish(localVideoTrackRef.current);
+          localVideoTrackRef.current.setEnabled(true);
+          setIsCameraOn(true);
+          if (localParticipant) setLocalParticipant({ ...localParticipant, hasVideo: true });
+        } catch (err) {
+          console.warn('[AGORA RTC] Failed to restore camera track after screen share:', err);
+        }
+      }
+      wasCameraActiveBeforeScreenShareRef.current = false;
+
       const myName = localParticipant?.name || localNameRef.current || 'Presenter';
       addEvent('SCREEN_SHARE_STOPPED', myName, `${myName} stopped presenting`);
     } catch (err) {
@@ -620,7 +640,19 @@ export function useAgoraRTC({
     if (isScreenSharing || !clientRef.current) return;
     soundManager.unlock();
     try {
-      // Create dedicated screen track with presentation detail encoder
+      // 1. Check if camera is currently active & published. If so, unpublish it first to prevent CAN_NOT_PUBLISH_MULTIPLE_VIDEO_TRACKS
+      const wasCameraActive = isCameraOn && !!localVideoTrackRef.current;
+      wasCameraActiveBeforeScreenShareRef.current = wasCameraActive;
+
+      if (wasCameraActive && localVideoTrackRef.current && clientRef.current) {
+        try {
+          await clientRef.current.unpublish(localVideoTrackRef.current);
+        } catch (e) {
+          console.warn('[AGORA RTC] Camera unpublish before screen share:', e);
+        }
+      }
+
+      // 2. Create dedicated screen track with presentation detail encoder (1080p Detail Mode)
       const sTrack = await AgoraRTC.createScreenVideoTrack(
         {
           encoderConfig: {
@@ -651,12 +683,20 @@ export function useAgoraRTC({
       const myName = localParticipant?.name || localNameRef.current || 'Presenter';
       addEvent('SCREEN_SHARE_STARTED', myName, `${myName} started presenting`);
     } catch (err: any) {
+      // If user cancelled browser picker, restore camera if it was active
+      if (wasCameraActiveBeforeScreenShareRef.current && clientRef.current && localVideoTrackRef.current) {
+        try {
+          await clientRef.current.publish(localVideoTrackRef.current);
+        } catch {}
+      }
+      wasCameraActiveBeforeScreenShareRef.current = false;
+
       if (err?.code !== 'PERMISSION_DENIED' && err?.name !== 'NotAllowedError') {
         console.error('[SCREEN SHARE ERROR]', err);
         onErrorRef.current?.(classifyAgoraError(err));
       }
     }
-  }, [isScreenSharing, stopScreenShare, localParticipant, addEvent]);
+  }, [isScreenSharing, isCameraOn, stopScreenShare, localParticipant, addEvent]);
 
   const playRemoteVideo = useCallback((uid: UID, container: HTMLElement) => {
     const user = remoteUsers.find((u) => u.uid === uid);

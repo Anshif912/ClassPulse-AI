@@ -55,8 +55,14 @@ export class BM25LexicalRetriever {
       }
 
       for (const q of queryTokens) {
-        const tf = tfMap.get(q) || 0;
+        let tf = tfMap.get(q) || 0;
         if (tf === 0) continue;
+
+        // Title & Section match multiplier
+        const titleLower = ((classChunks[i].metadata.title || '') + ' ' + (classChunks[i].metadata.sectionTitle || '')).toLowerCase();
+        if (titleLower.includes(q)) {
+          tf *= 2.5;
+        }
 
         const df = docFreq.get(q) || 0;
         const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
@@ -90,6 +96,7 @@ export class BM25LexicalRetriever {
       .toLowerCase()
       .replace(/[^\w\u0B80-\u0BFF\u0900-\u097F=+\-*/^.]+/g, ' ')
       .split(/\s+/)
+      .map((t) => t.length > 3 ? t.replace(/(?:ing|ed|es|s)$/, '') : t)
       .filter((t) => t.length > 0 && !STOP_WORDS.has(t));
   }
 

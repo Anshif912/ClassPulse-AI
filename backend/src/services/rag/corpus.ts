@@ -347,9 +347,9 @@ export const EDUCATIONAL_CORPUS: TopicDocument[] = [
     id: 'cs-data-structures',
     subject: 'Computer Science',
     chapter: 'Data Structures & Algorithms',
-    topic: 'Fundamental Data Structures and Big-O Complexity',
-    keywords: ['data structures', 'array', 'linked list', 'stack', 'queue', 'binary search tree', 'hash table', 'big o', 'complexity', 'time complexity'],
-    summary: 'Data structures organize and store data for efficient access and modification. Big-O notation measures algorithmic time and space scalability.',
+    topic: 'Fundamental Data Structures (Stack, Queue, Array, Linked List) and Big-O Complexity',
+    keywords: ['data structures', 'array', 'linked list', 'stack', 'queue', 'lifo', 'fifo', 'binary search tree', 'hash table', 'big o', 'complexity', 'time complexity'],
+    summary: 'Data structures organize and store data for efficient access and modification. A Stack follows LIFO (Last In First Out), while a Queue follows FIFO (First In First Out). Big-O notation measures algorithmic time and space scalability.',
     keyConcepts: [
       'Array vs Linked List: Arrays provide O(1) random access by index but O(n) arbitrary insertions; linked lists offer O(1) pointer-based insertion once located.',
       'Stack & Queue: Stack operates LIFO (Last In First Out); Queue operates FIFO (First In First Out).',

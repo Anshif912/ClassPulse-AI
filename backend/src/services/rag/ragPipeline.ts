@@ -216,6 +216,7 @@ export class RAGPipeline {
         title: c.metadata.title,
         page: c.metadata.pageStart,
         snippet: c.text.substring(0, 100) + '...',
+        text: c.text,
       })),
       evidenceState,
       latency: metrics,
@@ -274,29 +275,41 @@ export class RAGPipeline {
     userQuery: string
   ): Promise<string> {
     const apiKey = config.gemini.apiKey.trim();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    if (!apiKey) return '';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const prompt = contextText
       ? `${systemPrompt}\n\n<course_material>\n${contextText}\n</course_material>\n\nStudent Question: ${userQuery}`
       : `${systemPrompt}\n\nStudent Question: ${userQuery}`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 500,
-        },
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-    if (!response.ok) {
-      throw new Error(`Gemini HTTP ${response.status}: ${await response.text()}`);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 500,
+          },
+        }),
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Gemini HTTP ${response.status}: ${await response.text()}`);
+      }
+
+      const data: any = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      throw err;
     }
-
-    const data: any = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
   }
 
   /**
@@ -473,16 +486,36 @@ export class RAGPipeline {
     const q = transformation.originalQuery.toLowerCase();
     let answerText = '';
 
-    // If query asks for computer evolution or STEM concept
+    // General Knowledge Tutoring Mode (Out-of-syllabus concepts explained honestly and naturally)
     if (/gpu|graphics\s*card|graphics\s*processing/i.test(q)) {
       if (lang === 'ta') {
         answerText = 'இந்த விவரம் உங்கள் பாடக் குறிப்புகளில் இல்லை, ஆனால் பொதுவான கருத்தை விளக்குகிறேன்: GPU (Graphics Processing Unit) என்பது கிராபிக்ஸ் மற்றும் இணையான கணக்கீடுகளை (parallel processing) அதிவேகமாகச் செய்ய உதவும் தனித்துவமான செயலி (processor) ஆகும். இது வீடியோ கேமிங், 3D ரெண்டரிங் மற்றும் AI மாடல்களை இயக்க மிக முக்கியமானது.';
       } else if (lang === 'tanglish') {
-        answerText = 'Idhu unga class materials-la illa, aana general concept explain panren: GPU (Graphics Processing Unit) graphics rendering and heavy parallel calculations-kaga design panna processor. Gaming, 3D visual processing and modern AI training-ku GPU romba essential.';
+        answerText = 'Idhu unga class notes-la illa, aana general concept explain panren: GPU (Graphics Processing Unit) graphics rendering and heavy parallel computations-kaga design panna specialized processor. High-end gaming, 3D visuals and modern AI deep learning-ku GPU romba essential.';
       } else if (lang === 'hi') {
         answerText = 'यह जानकारी आपकी कक्षा की सामग्री में नहीं है, लेकिन मैं सामान्य रूप से समझाता हूँ: GPU (Graphics Processing Unit) एक विशेष प्रोसेसर है जो ग्राफिक्स और समानांतर गणनाओं (parallel processing) को तेजी से पूरा करता है। यह गेमिंग, 3D रेंडरिंग और AI के लिए बहुत महत्वपूर्ण है।';
       } else {
-        answerText = "I don't see GPU covered in your uploaded class materials, but I can explain the general concept: A GPU (Graphics Processing Unit) is a specialized electronic circuit designed to rapidly manipulate and alter memory to accelerate the creation of images and handle massively parallel computations, essential for gaming, 3D rendering, and modern AI training.";
+        answerText = "This topic is outside your uploaded class notes, but here is a clear explanation: A GPU (Graphics Processing Unit) is a specialized electronic circuit designed to rapidly manipulate memory and accelerate parallel calculations, making it essential for 3D rendering, video gaming, and training AI neural networks.";
+      }
+    } else if (/quantum\s*computing|qubit/i.test(q)) {
+      if (lang === 'ta') {
+        answerText = 'இந்த விவரம் உங்கள் பாடக் குறிப்புகளில் இல்லை, ஆனால் பொதுவான கருத்தை விளக்குகிறேன்: குவாண்டம் கணினிகள் (Quantum Computers) பாரம்பரிய பிட்டுகளுக்குப் (0 அல்லது 1) பதிலாக குவாண்டம் பிட்டுகளை (Qubits) பயன்படுத்துகின்றன. சூப்பர்போசிஷன் (Superposition) மற்றும் என்டாங்கிள்மென்ட் (Entanglement) கோட்பாடுகள் மூலம் இவை வழக்கமான கணினிகளை விட பன்மடங்கு வேகத்தில் சிக்கலான கணக்குகளைத் தீர்க்கின்றன.';
+      } else if (lang === 'tanglish') {
+        answerText = 'Idhu unga class notes-la illa, aana general concept explain panren: Quantum Computing standard 0 or 1 bits-ku badhula Qubits (quantum bits) use pannudhu. Superposition & Entanglement principles moolama normal computers-a vida billions of times faster-a complex calculations solve pannum.';
+      } else if (lang === 'hi') {
+        answerText = 'यह विषय आपके नोट्स में नहीं है, लेकिन सामान्य रूप से: क्वांटम कंप्यूटर सामान्य बिट्स (0 या 1) के बजाय क्यूबिट्स (Qubits) का उपयोग करते हैं। सुपरपोजिशन और एंटैंगलमेंट सिद्धांतों के आधार पर ये अत्यधिक जटिल गणनाओं को बहुत तेज़ी से हल करते हैं।';
+      } else {
+        answerText = "This topic is outside your uploaded class notes, but here is the concept: Quantum computing harnesses quantum mechanics (superposition and entanglement) using quantum bits (qubits) instead of binary 0s and 1s, enabling exponentially faster problem-solving for cryptography, molecular simulation, and optimization.";
+      }
+    } else if (/tcp\s*\/\s*ip|tcp\/ip|networking\s*protocol/i.test(q)) {
+      if (lang === 'ta') {
+        answerText = 'இந்த விவரம் உங்கள் பாடக் குறிப்புகளில் இல்லை, ஆனால் பொதுவான கருத்தை விளக்குகிறேன்: TCP/IP (Transmission Control Protocol / Internet Protocol) என்பது இணையத்தில் தரவு எவ்வாறு பாக்கெட்டுகளாகப் பிரிக்கப்பட்டு, அனுப்பப்பட்டு, சேருமிடத்தில் மீண்டும் சரியாக இணைக்கப்படுகிறது என்பதை வரையறுக்கும் உலகளாவிய நெட்வொர்க் நெறிமுறை (suite of communication protocols) ஆகும்.';
+      } else if (lang === 'tanglish') {
+        answerText = 'Idhu unga class notes-la illa, aana general concept explain panren: TCP/IP (Transmission Control Protocol / Internet Protocol) internet communication-oda core protocol. Data-va packets-a divide panni, network moolama safely transfer panni, destination-la correct-a assemble panna use aagudhu.';
+      } else if (lang === 'hi') {
+        answerText = 'यह विषय आपके नोट्स में नहीं है, लेकिन सामान्य रूप से: TCP/IP इंटरनेट का मूलभूत संचार प्रोटोकॉल है जो डेटा को सुरक्षित रूप से पैकेट में विभाजित करके नेटवर्क के माध्यम से गंतव्य तक पहुंचाता है।';
+      } else {
+        answerText = "This topic is outside your uploaded class notes, but here is the concept: TCP/IP (Transmission Control Protocol/Internet Protocol) is the fundamental communications protocol suite of the Internet, specifying how data is packetized, addressed, transmitted, routed, and received across interconnected networks.";
       }
     } else if (/first\s*generation|vacuum|1st\s*gen|முதல்\s*தலைமுறை/i.test(q)) {
       if (lang === 'ta') {
@@ -504,13 +537,13 @@ export class RAGPipeline {
       }
     } else {
       if (lang === 'ta') {
-        answerText = 'இந்தக் குறிப்பிட்ட விவரம் உங்கள் ஆசிரியர் பதிவேற்றிய பாடக் குறிப்புகளில் இல்லை, ஆனால் இந்தக் கருத்து பற்றி மேலும் விவாதிக்கலாம். என்ன சந்தேகம் என்று குறிப்பாகக் கேளுங்கள்!';
+        answerText = 'இந்தக் குறிப்பிட்ட விவரம் உங்கள் ஆசிரியர் பதிவேற்றிய பாடக் குறிப்புகளில் இல்லை, ஆனால் பொதுவான கல்வி முறையில் விளக்க முடியும். உங்களுக்கு இதில் என்ன சந்தேகம் என்று குறிப்பாகக் கேளுங்கள்!';
       } else if (lang === 'tanglish') {
-        answerText = 'Idhu unga teacher upload panna materials-la illa, aana general-a ungalukku explain panren. Specific-a enna doubt nu kelunga!';
+        answerText = 'Idhu unga teacher upload panna notes-la direct-a illa, aana general concept explain panren. Specific-a unga question kelunga!';
       } else if (lang === 'hi') {
-        answerText = 'यह जानकारी आपकी अपलोड की गई सामग्री में सीधे नहीं है, लेकिन मैं आपको समझा सकता हूँ। विशेष रूप से क्या पूछना चाहते हैं?';
+        answerText = 'यह जानकारी आपकी अपलोड की गई अध्ययन सामग्री में सीधे नहीं है, लेकिन मैं सामान्य रूप से समझा सकता हूँ। आप विशेष रूप से क्या जानना चाहते हैं?';
       } else {
-        answerText = "I don't see this specific detail covered in your teacher's uploaded course materials, but I can help explain the general concept. What specific part would you like to explore?";
+        answerText = "This concept is not directly present in your teacher's uploaded course materials, but I can help explain the general academic concept clearly. What specific aspect would you like to explore?";
       }
     }
 
@@ -521,12 +554,12 @@ export class RAGPipeline {
       detectedLanguage: lang,
       sources: [],
       isEducational: true,
-      topic: 'General Tutoring',
+      topic: 'General Knowledge',
     };
   }
 
   private getWeakEvidenceMessage(lang: string, chunks: RAGChunk[]): string {
-    const docTitle = chunks[0]?.metadata.title || 'course notes';
+    const docTitle = (chunks[0]?.metadata.title || 'course notes').replace(/_/g, ' ');
     const pageNum = chunks[0]?.metadata.pageStart;
     const citation = pageNum ? ` (📘 ${docTitle} · p.${pageNum})` : '';
 
@@ -545,13 +578,13 @@ export class RAGPipeline {
   private getNoEvidenceMessage(lang: string): string {
     switch (lang) {
       case 'ta':
-        return 'இந்த விவரம் உங்களுடைய பாடப்பிரிவு குறிப்புகளில் (uploaded course material) காணப்படவில்லை. பொதுவான விளக்கத்திற்கு என்ன வேண்டும் என்று கேளுங்கள்!';
+        return 'இந்த விவரம் உங்களுடைய பாடப்பிரிவு குறிப்புகளில் (uploaded course material) காணப்படவில்லை, ஆனால் பொதுவான அறிவியல் கருத்தாக இதை விவாதிக்கலாம்.';
       case 'hi':
-        return 'मुझे यह जानकारी आपके अपलोड किए गए पाठ्यक्रम सामग्री में नहीं मिली। सामान्य समझ के लिए पूछ सकते हैं।';
+        return 'यह जानकारी आपके अपलोड किए गए पाठ्यक्रम नोट्स में नहीं है, लेकिन सामान्य रूप से इसे समझा जा सकता है।';
       case 'tanglish':
-        return 'Idhu unga class materials la kedaikala machan, aana general-a explain panren.';
+        return 'Idhu unga class notes-la direct-a illa machan, aana general concept-a explain panren.';
       default:
-        return "I couldn't find enough information about this in your uploaded class materials, but I can explain the general concept.";
+        return "This concept is not directly present in your uploaded class materials, but I can explain the general background concept.";
     }
   }
 
@@ -564,6 +597,7 @@ export class RAGPipeline {
       detectedLanguage: lang as any,
       sources: [],
       isEducational: true,
+      topic: 'General Knowledge',
     };
   }
 }
