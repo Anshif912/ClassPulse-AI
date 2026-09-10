@@ -11,11 +11,13 @@ import {
   ArrowDown,
   Info,
   Volume2,
+  Compass,
 } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { api } from '../services/api';
 import { createVoiceEngine, IVoiceEngine } from '../services/voiceEngine';
 import { soundManager } from '../services/soundManager';
+import { StudentLearningDrawer } from './StudentLearningDrawer';
 
 interface AIClassroomPanelProps {
   classId: string;
@@ -69,6 +71,8 @@ export function AIClassroomPanel({
   // Scroll & Viewport State
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [expandedRationaleId, setExpandedRationaleId] = useState<string | null>(null);
 
   // Voice State
   const [voiceState, setVoiceState] = useState<AIVoiceState>('idle');
@@ -87,17 +91,18 @@ export function AIClassroomPanel({
     knowledgeMode?: string;
   }>({
     transport: 'Agora RTC',
-    agentProvider: 'Agora Conversational AI',
-    model: 'Gemini Live',
-    voiceMode: 'MLLM',
+    agentProvider: 'Agora Conversational AI Agent',
+    model: 'ClassPulse Grounded AI',
+    voiceMode: 'Agora Realtime Audio',
     sessionStatus: 'Idle',
-    voice: 'Realtime Agent Audio',
+    voice: 'Natural Warm Female (en-US-JennyNeural)',
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const conversationBottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const voiceEngineRef = useRef<IVoiceEngine | null>(null);
+  const transcriptTimerRef = useRef<any>(null);
   const isMountedRef = useRef(true);
   const isAtBottomRef = useRef(true);
   isAtBottomRef.current = isAtBottom;
@@ -133,12 +138,11 @@ export function AIClassroomPanel({
     api.getAgentDiagnostics()
       .then((diag) => {
         if (isMountedRef.current) {
-          if (!diag.geminiConfigured) {
-            setVoiceState('unsupported');
+          if (!diag.configured && !diag.agoraConfigured) {
             setAgentDiagnostics((prev) => ({
               ...prev,
-              sessionStatus: 'Gemini Live not configured',
-              developerDiagnostic: 'Gemini Live not configured',
+              sessionStatus: 'Agora credentials not configured',
+              developerDiagnostic: 'AGORA_APP_ID and AGORA_APP_CERTIFICATE required',
             }));
           }
         }
@@ -147,6 +151,9 @@ export function AIClassroomPanel({
 
     return () => {
       isMountedRef.current = false;
+      if (transcriptTimerRef.current) {
+        clearTimeout(transcriptTimerRef.current);
+      }
       if (voiceEngineRef.current) {
         voiceEngineRef.current.cleanup();
       }
@@ -185,6 +192,7 @@ export function AIClassroomPanel({
       if (!trimmed || isProcessing) return;
 
       soundManager.unlock();
+      setLiveTranscript(null);
       if (isVoiceActive(voiceState) && voiceState === 'speaking') {
         handleInterrupt();
       }
@@ -239,14 +247,62 @@ export function AIClassroomPanel({
         ]);
       } finally {
         setIsProcessing(false);
+        setLiveTranscript(null);
+        setTimeout(() => scrollToBottom('smooth'), 100);
       }
     },
-    [classId, handleInterrupt, isProcessing, scrollToBottom, voiceState]
+    [classId, isProcessing, voiceState, handleInterrupt, scrollToBottom]
+  );
+
+  const handleOneTapAction = useCallback(
+    async (
+      actionType: 'SIMPLER' | 'EXAMPLE' | 'TEST_ME' | 'PRACTICE' | 'CATCH_UP' | 'CHALLENGE',
+      msg: ChatMessage
+    ) => {
+      const topicId = msg.tutorDecision?.topicId || 'current_topic';
+
+      if (actionType === 'CATCH_UP' || actionType === 'TEST_ME' || actionType === 'PRACTICE') {
+        setIsDrawerOpen(true);
+        return;
+      }
+
+      if (actionType === 'SIMPLER') {
+        api.recordLearningEvent({
+          classId,
+          topicId,
+          category: 'EXPLANATION_PREFERENCE',
+          metrics: { strategyUsed: 'ANALOGY_EXAMPLE' },
+          contextSummary: 'Student requested a simpler explanation',
+        }).catch(() => {});
+        sendMessage('Can you explain this simpler and more straightforwardly?', 'text');
+      } else if (actionType === 'EXAMPLE') {
+        api.recordLearningEvent({
+          classId,
+          topicId,
+          category: 'EXPLANATION_PREFERENCE',
+          metrics: { strategyUsed: 'ANALOGY_EXAMPLE' },
+          contextSummary: 'Student requested a concrete analogy/example',
+        }).catch(() => {});
+        sendMessage('Can you give me a real-world analogy or concrete example for this?', 'text');
+      } else if (actionType === 'CHALLENGE') {
+        api.recordLearningEvent({
+          classId,
+          topicId,
+          category: 'DIFFICULTY_PREFERENCE',
+          metrics: { difficulty: 'HARD' },
+          contextSummary: 'Student requested an advanced challenge question',
+        }).catch(() => {});
+        sendMessage('Give me a challenging concept or problem related to this.', 'text');
+      }
+    },
+    [classId, sendMessage]
   );
 
   // Toggle Private AI Agent Voice Session
   const handleTogglePrivateMic = async () => {
     soundManager.unlock();
+    if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
+    setLiveTranscript(null);
     if (isVoiceActive(voiceState)) {
       // Stop session
       if (voiceEngineRef.current) {
@@ -270,11 +326,21 @@ export function AIClassroomPanel({
       await voiceEngineRef.current.startSession(classId, {
         onInterimTranscript: (text, role) => {
           if (!isMountedRef.current) return;
+          if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
+          if (!text || !text.trim()) {
+            setLiveTranscript(null);
+            return;
+          }
           const prefix = role === 'user' ? '🎙️ You: ' : '✨ ClassPulse: ';
           setLiveTranscript(`${prefix}${text}`);
+          // Auto-clear lingering transcript after 2.5s if no final result comes
+          transcriptTimerRef.current = setTimeout(() => {
+            if (isMountedRef.current) setLiveTranscript(null);
+          }, 2500);
         },
         onFinalTranscript: (text, role) => {
           if (!isMountedRef.current) return;
+          if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
           setLiveTranscript(null);
           if (text && text.trim()) {
             const chatRole = role === 'user' ? 'student' : 'companion';
@@ -294,27 +360,22 @@ export function AIClassroomPanel({
           if (!isMountedRef.current) return;
           console.log(`[VOICE LATENCY] Total End-to-End: ${metrics.totalLatencyMs}ms`);
         },
-        onPipelineChange: (pipeline) => {
+        onPipelineChange: (_pipeline) => {
           if (!isMountedRef.current) return;
-          if (pipeline === 'fallback') {
-            setAgentDiagnostics((prev) => ({
-              ...prev,
-              agentProvider: 'Agora Conversational AI (Cascaded STT/LLM/TTS)',
-              model: 'Cascaded STT+LLM+TTS',
-              voiceMode: 'Cascaded Realtime Audio',
-              sessionStatus: 'AI Voice using fallback',
-            }));
-          } else {
-            setAgentDiagnostics((prev) => ({
-              ...prev,
-              agentProvider: 'Agora Conversational AI Agent',
-              model: 'Gemini Live',
-              voiceMode: 'MLLM',
-            }));
-          }
+          setAgentDiagnostics((prev) => ({
+            ...prev,
+            agentProvider: 'Agora Conversational AI Agent',
+            model: 'ClassPulse Grounded AI',
+            voiceMode: 'Agora Realtime Audio',
+            sessionStatus: 'Connected',
+          }));
         },
         onStateChange: (state) => {
           if (!isMountedRef.current) return;
+          if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
+          if (state !== 'LISTENING') {
+            setLiveTranscript(null);
+          }
           switch (state) {
             case 'CONNECTING':
               setVoiceState('connecting');
@@ -336,7 +397,7 @@ export function AIClassroomPanel({
             case 'UNAVAILABLE':
               soundManager.play('ai_error');
               setVoiceState('unsupported');
-              setAgentDiagnostics((prev) => ({ ...prev, sessionStatus: 'Gemini Live Not Configured' }));
+              setAgentDiagnostics((prev) => ({ ...prev, sessionStatus: 'AI Voice Unavailable' }));
               break;
             case 'ERROR':
               soundManager.play('ai_error');
@@ -351,16 +412,20 @@ export function AIClassroomPanel({
         onError: (err) => {
           if (!isMountedRef.current) return;
           console.warn('[AIClassroomPanel Voice Error]', err);
+          if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
           soundManager.play('ai_error');
           setError(err);
           setVoiceState('unsupported');
+          setLiveTranscript(null);
           setAgentDiagnostics((prev) => ({ ...prev, sessionStatus: 'Unavailable' }));
         },
       }, selectedLang);
     } catch (err: any) {
+      if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
       soundManager.play('ai_error');
       setError(err.message || 'Could not start Agora Voice Agent.');
       setVoiceState('error');
+      setLiveTranscript(null);
     }
   };
 
@@ -441,15 +506,20 @@ export function AIClassroomPanel({
   };
 
   const starterPrompts = selectedLang === 'ta' ? [
-    'முதல் தலைமுறை கணினிகள் பற்றி சொல்லுங்க',
-    'GPU என்றால் என்ன?',
-    'ஏன் பெரியதாக இருந்தது?',
+    `${subject} பற்றிய முக்கிய கருத்தை விளக்குங்கள்`,
+    'இந்த தலைப்பின் முக்கிய பயன்பாடுகள் என்ன?',
+    'எளிய உதாரணத்துடன் விளக்குங்கள்',
     'பாடக் குறிப்புகளை சுருக்கமாகக் கூறுங்கள்',
+  ] : selectedLang === 'hi' ? [
+    `${subject} के मुख्य विषय को समझाइए`,
+    'इसके व्यावहारिक उदाहरण क्या हैं?',
+    'सरल भाषा में समझाइए',
+    'कक्षा के नोट्स का सारांश दीजिए',
   ] : [
     `Explain a key concept in ${subject}`,
-    'What is a GPU?',
-    'Why were vacuum tubes so large?',
-    'Summarize the class notes',
+    'What are the real-world applications of this topic?',
+    'Give me a simple concrete example',
+    'Summarize the course reading notes',
   ];
 
   return (
@@ -500,6 +570,20 @@ export function AIClassroomPanel({
               </div>
             )}
           </div>
+
+          {/* 1-to-1 Personal Learning Frontier Drawer */}
+          <button
+            onClick={() => setIsDrawerOpen((prev) => !prev)}
+            className={`flex items-center gap-1 px-2 py-1 rounded-xl border text-[10px] font-bold transition-all shadow-sm ${
+              isDrawerOpen
+                ? 'bg-indigo-600 border-indigo-400 text-white'
+                : 'bg-indigo-950/60 border-indigo-500/40 text-indigo-300 hover:text-white hover:bg-indigo-900/60'
+            }`}
+            title="Open Personal Learning Frontier & Adaptive Checks"
+          >
+            <Compass className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Path</span>
+          </button>
 
           {/* Diagnostics info toggle */}
           <button
@@ -558,16 +642,23 @@ export function AIClassroomPanel({
               {stateLabel[voiceState]}
             </span>
             <span className="text-[9px] text-slate-400 block truncate">
-              Agora RTC • Gemini Live MLLM
+              Agora RTC • ClassPulse AI Voice
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950/50 border border-emerald-800/40 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            Active
-          </span>
+          {isVoiceActive(voiceState) ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950/50 border border-emerald-800/40 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              Active
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-900 border border-slate-700/50 text-slate-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+              Standby
+            </span>
+          )}
         </div>
       </div>
 
@@ -597,7 +688,7 @@ export function AIClassroomPanel({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 relative"
+        className="flex-1 min-h-0 overflow-y-auto px-4 pt-3.5 pb-4 space-y-3 relative scroll-pt-4"
         style={{ scrollBehavior: 'smooth' }}
       >
         {/* Empty state — ONLY shown when no messages have been sent yet */}
@@ -646,6 +737,69 @@ export function AIClassroomPanel({
             key={msg.id}
             className={`flex flex-col ${msg.role === 'student' ? 'items-end' : 'items-start'} animate-fade-in`}
           >
+            {/* Adaptive Strategy Badge for Companion */}
+            {msg.role === 'companion' && msg.tutorDecision && (
+              <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px] text-purple-300 font-medium">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-950/70 border border-purple-800/50 text-[9px] font-semibold text-purple-200 shadow-sm">
+                  <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                  {msg.tutorDecision.strategy === 'ANALOGY_EXAMPLE' || msg.tutorDecision.strategy === 'ANALOGY'
+                    ? 'Guided Analogy'
+                    : msg.tutorDecision.strategy === 'CONCRETE_EXAMPLE' || msg.tutorDecision.strategy === 'VISUAL_STRUCTURED'
+                    ? 'Visual & Structured'
+                    : msg.tutorDecision.strategy === 'STEP_BY_STEP'
+                    ? 'Step-by-Step'
+                    : 'Direct Explanation'}
+                  {' · '}
+                  {msg.tutorDecision.pace === 'FAST' || msg.tutorDecision.pace === 'ACCELERATED'
+                    ? 'Fast Pace'
+                    : msg.tutorDecision.pace === 'GENTLE' || msg.tutorDecision.pace === 'SLOW'
+                    ? 'Gentle Pace'
+                    : 'Comfortable Pace'}
+                  {msg.tutorDecision.difficulty === 'HARD' ? ' · Challenge' : ''}
+                </span>
+
+                {msg.transparencyRationale && (
+                  <button
+                    onClick={() =>
+                      setExpandedRationaleId(
+                        expandedRationaleId === msg.id ? null : msg.id
+                      )
+                    }
+                    className="text-[9px] text-slate-400 hover:text-purple-300 underline underline-offset-2 transition-colors"
+                    title="Why was this explanation tailored this way?"
+                  >
+                    Why this style?
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Transparency Rationale Box */}
+            {msg.role === 'companion' &&
+              expandedRationaleId === msg.id &&
+              msg.transparencyRationale && (
+                <div className="mb-2 max-w-[88%] p-2.5 rounded-xl bg-purple-950/80 border border-purple-700/50 text-[10px] text-purple-200 leading-relaxed shadow-lg animate-fade-in space-y-1">
+                  <div className="flex items-center justify-between font-bold text-purple-300 pb-1 border-b border-purple-800/40">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-purple-400" />
+                      Pedagogical Rationale
+                    </span>
+                    <button
+                      onClick={() => setExpandedRationaleId(null)}
+                      className="text-purple-400 hover:text-white text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="text-slate-200">{msg.transparencyRationale}</p>
+                  {msg.tutorDecision?.prerequisiteSupportRequired && (
+                    <div className="text-[9px] text-amber-300 font-semibold pt-0.5">
+                      ⚡ Included foundational context for current topic prerequisite.
+                    </div>
+                  )}
+                </div>
+              )}
+
             <div
               className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-lg ${
                 msg.role === 'student'
@@ -654,6 +808,67 @@ export function AIClassroomPanel({
               }`}
             >
               {renderMessageContent(msg.content, msg.role === 'companion')}
+
+              {/* Contextual One-Tap Learning Action Pills */}
+              {msg.role === 'companion' && (
+                <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[9px] text-slate-500 font-medium mr-0.5">Quick Actions:</span>
+                  <button
+                    onClick={() => handleOneTapAction('SIMPLER', msg)}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-slate-300 hover:text-white transition-all shadow-xs"
+                  >
+                    Explain simpler
+                  </button>
+                  <button
+                    onClick={() => handleOneTapAction('EXAMPLE', msg)}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-slate-300 hover:text-white transition-all shadow-xs"
+                  >
+                    Give me an example
+                  </button>
+                  <button
+                    onClick={() => handleOneTapAction('TEST_ME', msg)}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-700/50 text-indigo-300 hover:text-white transition-all shadow-xs"
+                  >
+                    Test me
+                  </button>
+                  <button
+                    onClick={() => handleOneTapAction('CHALLENGE', msg)}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/50 text-purple-300 hover:text-white transition-all shadow-xs"
+                  >
+                    Challenge me
+                  </button>
+                  <button
+                    onClick={() => handleOneTapAction('CATCH_UP', msg)}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-amber-950/60 hover:bg-amber-900/60 border border-amber-700/50 text-amber-300 hover:text-white transition-all shadow-xs"
+                  >
+                    Catch me up
+                  </button>
+                </div>
+              )}
+
+              {/* Suggested Follow-up Practice */}
+              {msg.role === 'companion' && msg.suggestedFollowUpPractice && (
+                <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
+                    <span className="flex items-center gap-1 text-indigo-400">
+                      <Sparkles className="w-3 h-3" />
+                      Suggested Check:
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (msg.suggestedFollowUpPractice) {
+                        setInputText(msg.suggestedFollowUpPractice);
+                        inputRef.current?.focus();
+                      }
+                    }}
+                    className="text-left text-[11px] p-2 rounded-xl bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/40 text-indigo-200 transition-colors group flex items-center justify-between"
+                  >
+                    <span>{msg.suggestedFollowUpPractice}</span>
+                    <Send className="w-3 h-3 text-indigo-400 group-hover:text-white shrink-0 ml-1.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -745,6 +960,17 @@ export function AIClassroomPanel({
           </button>
         </div>
       </form>
+
+      {/* 1-to-1 Adaptive Learning Frontier Drawer */}
+      <StudentLearningDrawer
+        classId={classId}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onAskDoubt={(q) => {
+          setInputText(q);
+          setIsDrawerOpen(false);
+        }}
+      />
     </aside>
   );
 }

@@ -143,7 +143,6 @@ export const api = {
     agentProvider: string;
     model: string;
     voiceMode: string;
-    geminiConfigured: boolean;
     agoraConfigured: boolean;
     errorMessage?: string;
   }> {
@@ -152,12 +151,12 @@ export const api = {
 
   async getAgentDiagnostics(): Promise<{
     configured: boolean;
-    geminiConfigured: boolean;
     agoraConfigured: boolean;
     installedAgentsVersion: string;
-    mllmMode: string;
-    model: string;
-    voiceMode: string;
+    primaryMode?: string;
+    primaryModel?: string;
+    model?: string;
+    voiceMode?: string;
     transport: string;
     activeSessionsCount: number;
   }> {
@@ -332,6 +331,12 @@ export const api = {
     });
   },
 
+  async getClassConversationHistory(
+    classId: string
+  ): Promise<{ conversationId: string; classId: string; userId: string; messages: Array<{ id: string; role: 'student' | 'companion' | 'system'; content: string; timestamp: string; topic?: string }> }> {
+    return request(`/chat/classroom/${classId}/history`);
+  },
+
   // ─── Auth API (Email + OTP) ────────────────────────────────────────────────
   async sendOtp(email: string, name?: string, role?: 'TEACHER' | 'STUDENT'): Promise<{ success: boolean; message: string; devOtp?: string }> {
     return request('/auth/otp/send', {
@@ -365,4 +370,221 @@ export const api = {
   async getAuthStatus(): Promise<{ googleOAuthConfigured: boolean; clientId: string | null; authUrl: string | null }> {
     return request('/auth/status');
   },
+
+  // ─── Adaptive Personalization & 1-to-1 Learning Layer ─────────────────────
+  async getLearnerProfile(classId: string): Promise<{ profile: any; topicMasteries: any[]; conceptGraph: any }> {
+    return request(`/personalization/me/${classId}`);
+  },
+
+  async recordLearningEvent(data: { classId: string; topicId: string; category: string; metrics: any; contextSummary?: string }): Promise<{ success: boolean; profile: any; topicMastery: any }> {
+    return request('/personalization/event', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getLearningBridge(classId: string): Promise<{ bridge: any }> {
+    return request(`/personalization/bridge/${classId}`);
+  },
+
+  async generateMicroAssessment(classId: string, topicId?: string): Promise<{ question: any }> {
+    return request('/personalization/assessment/generate', {
+      method: 'POST',
+      body: JSON.stringify({ classId, topicId }),
+    });
+  },
+
+  async evaluateMicroAssessment(
+    classId: string,
+    question: any,
+    studentAnswer: string,
+    timeToAnswerMs?: number
+  ): Promise<{ evaluation: any }> {
+    return request('/personalization/assessment/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({ classId, question, studentAnswer, timeToAnswerMs }),
+    });
+  },
+
+  async getTeacherInsights(classId: string): Promise<{ intelligence: any; state: any; conceptGraph: any }> {
+    return request(`/personalization/teacher/insights/${classId}`);
+  },
+
+  async updateClassroomFrontier(classId: string, topicId: string): Promise<{ success: boolean; state: any }> {
+    return request(`/personalization/teacher/frontier/${classId}`, {
+      method: 'POST',
+      body: JSON.stringify({ topicId }),
+    });
+  },
+
+  async getDiagnosticSuite(classId: string): Promise<{ session: any }> {
+    return request(`/personalization/diagnostic/${classId}`);
+  },
+
+  async saveDiagnosticAnswer(
+    classId: string,
+    sessionId: string,
+    submission: { questionId: string; answer: string; timeToAnswerMs?: number; hintsUsed?: number }
+  ): Promise<{ success: boolean; session: any }> {
+    return request(`/personalization/diagnostic/${classId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, submission }),
+    });
+  },
+
+  async submitDiagnosticSuite(
+    classId: string,
+    sessionId: string,
+    submissions: Array<{ questionId: string; answer: string; timeToAnswerMs?: number; hintsUsed?: number }>
+  ): Promise<{ success: boolean; summary: any; session: any; profile: any }> {
+    return request(`/personalization/diagnostic/${classId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, submissions }),
+    });
+  },
+
+  async requestRecalibration(classId: string): Promise<{ success: boolean; profile: any; session: any }> {
+    return request(`/personalization/recalibrate/${classId}`, {
+      method: 'POST',
+    });
+  },
+
+  // ─── Phase 4 Study Assistant & Canonical State API ──────────────────────────
+  async getStudentLearningState(classId: string): Promise<{ state: any }> {
+    return request(`/personalization/state/${classId}`);
+  },
+
+  async startStudySession(
+    classId: string,
+    topicId?: string,
+    mode: string = 'STUDY'
+  ): Promise<{ session: any; prompt: string; expectedInputType: string }> {
+    return request('/personalization/study-session/start', {
+      method: 'POST',
+      body: JSON.stringify({ classId, topicId, mode }),
+    });
+  },
+
+  async stepStudySession(
+    classId: string,
+    sessionId: string,
+    studentResponse: string,
+    timeToAnswerMs?: number
+  ): Promise<{ session: any; feedback: string; evaluation?: any; nextPrompt?: string; expectedInputType?: 'TEXT' | 'MCQ' | 'CHOICE'; isCompleted: boolean }> {
+    return request('/personalization/study-session/step', {
+      method: 'POST',
+      body: JSON.stringify({ classId, sessionId, studentResponse, timeToAnswerMs }),
+    });
+  },
+
+  async getActiveStudySession(classId: string): Promise<{ session: any | null }> {
+    return request(`/personalization/study-session/active/${classId}`);
+  },
+
+  async getStudyPlan(classId: string): Promise<{ goal: any | null; plan: any | null }> {
+    return request(`/personalization/study-plan/${classId}`);
+  },
+
+  async saveStudyGoal(
+    classId: string,
+    data: { goalType: string; targetDate?: string; title?: string }
+  ): Promise<{ success: boolean; goal: any; plan: any }> {
+    return request(`/personalization/study-plan/${classId}/goal`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async overrideStrategy(data: {
+    classId: string;
+    strategy?: string;
+    depth?: string;
+    promptStyle?: string;
+  }): Promise<{ success: boolean }> {
+    return request('/personalization/strategy-override', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getRetentionQueue(classId: string): Promise<{ retentionQueue: any[] }> {
+    return request(`/personalization/retention-queue/${classId}`);
+  },
+
+  // ─── Phase 5: Personal Learning Profile (Layer 1) API ───────────────────────
+  async getPersonalLearningProfile(): Promise<{ profile: any }> {
+    return request('/personalization/profile');
+  },
+
+  async getActivePersonalCalibration(): Promise<{ session: any | null }> {
+    return request('/personalization/calibration/active');
+  },
+
+  async startPersonalCalibration(): Promise<{ session: any }> {
+    return request('/personalization/calibration/start', {
+      method: 'POST',
+    });
+  },
+
+  async submitPersonalCalibrationStep(sessionId: string, submission: any): Promise<{ session: any }> {
+    return request('/personalization/calibration/step', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, submission }),
+    });
+  },
+
+  async completePersonalCalibration(sessionId: string): Promise<{ success: boolean; profile: any }> {
+    return request('/personalization/calibration/complete', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    });
+  },
+
+  async recalibratePersonalProfile(): Promise<{ session: any }> {
+    return request('/personalization/recalibrate', {
+      method: 'POST',
+    });
+  },
+
+  async recordStudySessionDuration(predictedMinutes: number, actualMinutes: number): Promise<{ success: boolean; profile: any }> {
+    return request('/personalization/study-session/record', {
+      method: 'POST',
+      body: JSON.stringify({ predictedMinutes, actualMinutes }),
+    });
+  },
+
+  async estimateStudyTime(params?: {
+    wordCount?: number;
+    conceptCount?: number;
+    contentComplexity?: string;
+    currentMastery?: number;
+  }): Promise<{ estimate: any }> {
+    const query = new URLSearchParams();
+    if (params?.wordCount) query.set('wordCount', String(params.wordCount));
+    if (params?.conceptCount) query.set('conceptCount', String(params.conceptCount));
+    if (params?.contentComplexity) query.set('contentComplexity', params.contentComplexity);
+    if (params?.currentMastery !== undefined) query.set('currentMastery', String(params.currentMastery));
+    const qs = query.toString();
+    return request(`/personalization/estimate-study-time${qs ? `?${qs}` : ''}`);
+  },
+
+  async getCohortProfileAggregate(classId: string): Promise<{ aggregate: any }> {
+    return request(`/personalization/cohort-profile-aggregate/${classId}`);
+  },
+
+  get personalization() {
+    return {
+      getPersonalLearningProfile: api.getPersonalLearningProfile,
+      startPersonalCalibration: api.startPersonalCalibration,
+      submitPersonalCalibrationStep: api.submitPersonalCalibrationStep,
+      completePersonalCalibration: api.completePersonalCalibration,
+      getActivePersonalCalibration: api.getActivePersonalCalibration,
+      recalibratePersonalProfile: api.recalibratePersonalProfile,
+      recordStudySessionDuration: api.recordStudySessionDuration,
+      estimateStudyTime: api.estimateStudyTime,
+      getCohortProfileAggregate: api.getCohortProfileAggregate,
+    };
+  },
 };
+
+

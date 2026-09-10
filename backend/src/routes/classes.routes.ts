@@ -6,6 +6,7 @@ import { SemanticChunker } from '../services/rag/chunker';
 import { EmbeddingService } from '../services/rag/embeddingService';
 import { ragRepository } from '../services/rag/ragRepository';
 import { insightsService } from '../services/insights.service';
+import { conceptGraphService } from '../services/personalization/conceptGraphService';
 import {
   requireAuth,
   requireTeacher,
@@ -291,10 +292,13 @@ router.post('/:classId/materials',
       req.user!.id
     );
 
-    // 2. 3072-d Embeddings
-    const embeddings = await EmbeddingService.embedBatch(ragChunks.map((c) => c.text));
-    for (let i = 0; i < ragChunks.length; i++) {
-      ragChunks[i].embedding = embeddings[i];
+    // 2. Embeddings (bypassed in lexical_fast mode)
+    const retrievalMode = (process.env.RAG_RETRIEVAL_MODE || 'lexical_fast').toLowerCase();
+    if (retrievalMode !== 'lexical_fast') {
+      const embeddings = await EmbeddingService.embedBatch(ragChunks.map((c) => c.text));
+      for (let i = 0; i < ragChunks.length; i++) {
+        ragChunks[i].embedding = embeddings[i];
+      }
     }
 
     // 3. Add to RAG 2.0 Repository
@@ -393,6 +397,9 @@ router.post('/:classId/materials/upload-pdf',
         res.status(404).json({ error: 'Classroom not found.' });
         return;
       }
+
+      // Invalidate concept graph cache so it rebuilds from new materials/subject
+      conceptGraphService.invalidateCache(classId);
 
       console.log(`[PDF_INGESTED] class=${classId} file="${file.originalname}" pages=${processed.pageCount} chunks=${processed.chunks.length}`);
 
@@ -594,15 +601,24 @@ router.get('/:classId/moderation',
   requireAuth,
   requireMembership(),
   (req: Request, res: Response): void => {
-    const classId = req.params.classId.toUpperCase();
-    const moderations = dbService.getClassModerationStates(classId);
-    const myModeration = dbService.getParticipantModeration(classId, req.user!.id);
+    try {
+      const classId = req.params.classId.toUpperCase();
+      const moderations = dbService.getClassModerationStates(classId);
+      const myModeration = dbService.getParticipantModeration(classId, req.user!.id);
 
-    res.json({
-      moderations,
-      isUserMutedByModerator: Boolean(myModeration?.isMuted),
-      myModeration: myModeration || null,
-    });
+      res.json({
+        moderations: moderations || {},
+        isUserMutedByModerator: Boolean(myModeration?.isMuted),
+        myModeration: myModeration || null,
+      });
+    } catch (err: any) {
+      console.warn('[CLASS_MODERATION_GET_WARNING]', err?.message);
+      res.json({
+        moderations: {},
+        isUserMutedByModerator: false,
+        myModeration: null,
+      });
+    }
   }
 );
 

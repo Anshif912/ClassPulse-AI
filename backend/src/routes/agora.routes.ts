@@ -193,11 +193,24 @@ router.post('/agent/start',
 );
 
 // ─── GET /api/agora/agent/diagnostics ────────────────────────────────────────
-// Safe diagnostic check verifying backend Gemini Live + Agora config without exposing keys.
+// Safe diagnostic check verifying backend Agora voice configuration without exposing keys.
 router.get('/agent/diagnostics',
   (req: Request, res: Response): void => {
-    const diagnostics = agoraService.getDiagnostics();
-    res.json(diagnostics);
+    try {
+      const diagnostics = agoraService.getDiagnostics();
+      res.json(diagnostics);
+    } catch (err: any) {
+      console.warn('[AGORA_DIAGNOSTICS_WARNING]', err?.message);
+      res.json({
+        configured: false,
+        agoraConfigured: false,
+        installedAgentsVersion: '2.7.0',
+        primaryMode: 'Agora Conversational AI',
+        primaryModel: 'ClassPulse Grounded AI',
+        transport: 'Agora RTC',
+        activeSessionsCount: 0,
+      });
+    }
   }
 );
 

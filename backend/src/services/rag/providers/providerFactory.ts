@@ -27,7 +27,7 @@ export class RAGProviderFactory {
   public static getEmbeddingProvider(): IEmbeddingProvider {
     if (this.embeddingProvider) return this.embeddingProvider;
 
-    const requested = (process.env.RAG_EMBEDDING_PROVIDER || '').toLowerCase();
+    const requested = (process.env.RAG_EMBEDDING_PROVIDER || config.rag?.embeddingProvider || 'qwen').toLowerCase();
     if (requested === 'qwen' || requested === 'qwen3') {
       this.embeddingProvider = new QwenEmbeddingProvider();
     } else if (requested === 'gemini' || (config.gemini.isConfigured && requested !== 'openai')) {
@@ -44,7 +44,7 @@ export class RAGProviderFactory {
   public static getRerankerProvider(): IRerankerProvider {
     if (this.rerankerProvider) return this.rerankerProvider;
 
-    const requested = (process.env.RAG_RERANKER_PROVIDER || '').toLowerCase();
+    const requested = (process.env.RAG_RERANKER_PROVIDER || config.rag?.rerankerProvider || 'qwen').toLowerCase();
     if (requested === 'qwen' || requested === 'qwen3') {
       this.rerankerProvider = new QwenRerankerProvider();
     } else {
@@ -57,11 +57,13 @@ export class RAGProviderFactory {
   public static getLLMProvider(): ILLMProvider {
     if (this.llmProvider) return this.llmProvider;
 
-    const requested = (process.env.RAG_LLM_PROVIDER || '').toLowerCase();
+    const requested = (process.env.RAG_LLM_PROVIDER || config.rag?.llmProvider || 'qwen').toLowerCase();
     if (requested === 'qwen' || requested === 'qwen3') {
       this.llmProvider = new QwenLLMProvider();
-    } else {
+    } else if (requested === 'gemini' && config.gemini.apiKey) {
       this.llmProvider = new GeminiLLMProvider();
+    } else {
+      this.llmProvider = new QwenLLMProvider();
     }
 
     return this.llmProvider;
@@ -111,9 +113,13 @@ export class RAGProviderFactory {
     const rerankReq = (process.env.RAG_RERANKER_PROVIDER || config.rag?.rerankerProvider || 'qwen').toLowerCase();
     const llmReq = (process.env.RAG_LLM_PROVIDER || config.rag?.llmProvider || 'qwen').toLowerCase();
 
-    const isEmbFallback = emb.name === 'deterministic_fallback' || (emb as any).lastStatus === 'offline_fallback';
-    const isRerankFallback = rerank.name === 'local-neural-reranker' || (rerank as any).lastStatus === 'offline_fallback';
-    const isLLMFallback = (llm as any).lastStatus === 'offline_fallback';
+    const embStatus = (emb as any).lastStatus || 'online';
+    const rerankStatus = (rerank as any).lastStatus || 'online';
+    const llmStatus = (llm as any).lastStatus || 'online';
+
+    const isEmbFallback = emb.name === 'deterministic_fallback' || embStatus === 'offline_fallback' || embStatus === 'error';
+    const isRerankFallback = rerank.name === 'local-neural-reranker' || rerankStatus === 'offline_fallback' || rerankStatus === 'error';
+    const isLLMFallback = llmStatus === 'offline_fallback' || llmStatus === 'error';
 
     return {
       embedding: {
@@ -122,21 +128,21 @@ export class RAGProviderFactory {
         activeModel: emb.model,
         dimension: emb.dimension,
         isFallback: isEmbFallback,
-        status: isEmbFallback ? 'Fallback (Deterministic / Offline)' : 'Reachable / Active',
+        status: embStatus === 'online' ? 'READY (Qwen3-Embedding-0.6B / 1024d)' : `OFFLINE / ERROR (${embStatus})`,
       },
       reranker: {
         requested: rerankReq,
-        activeProvider: isRerankFallback ? 'Fallback (LocalNeuralCrossEncoder)' : rerank.name,
+        activeProvider: rerank.name,
         activeModel: rerank.model,
         isFallback: isRerankFallback,
-        status: isRerankFallback ? 'Port 8000 Offline -> Active: LocalNeuralCrossEncoder' : 'Port 8000 Reachable / Active',
+        status: rerankStatus === 'online' ? 'READY (Qwen3-Reranker-0.6B / Neural Cross-Encoder)' : `OFFLINE / ERROR (${rerankStatus})`,
       },
       llm: {
         requested: llmReq,
         activeProvider: llm.name,
         activeModel: llm.model,
         isFallback: isLLMFallback,
-        status: isLLMFallback ? 'Local Ollama Offline / Fallback' : 'Reachable / Active',
+        status: llmStatus === 'online' ? 'READY (qwen3:4b Ollama)' : `OFFLINE / ERROR (${llmStatus})`,
       },
     };
   }

@@ -56,6 +56,9 @@ export interface ChatMessage {
   };
   spokenAudioUrl?: string;
   isPrivate?: boolean;
+  tutorDecision?: any;
+  transparencyRationale?: string;
+  suggestedFollowUpPractice?: string;
 }
 
 export interface ChatRequest {
@@ -331,4 +334,122 @@ export interface LatencyMetrics {
   audioPlaybackAt?: number;
   totalRoundtripMs?: number;
 }
+
+// ─── Phase 5: Personal Learning Profile (Layer 1) Types ──────────────────────
+export type PersonalProfileStatus = 'UNCALIBRATED' | 'CALIBRATING' | 'CALIBRATED';
+export type ReadingPaceLevel = 'SLOW' | 'AVERAGE' | 'FAST';
+export type PerformanceLevel = 'FOUNDATIONAL' | 'INTERMEDIATE' | 'PROFICIENT';
+export type EstimatedStudyPace = 'INTENSIVE' | 'MODERATE' | 'EXPEDITED';
+export type ProfileConfidenceLevel = 'BUILDING' | 'CALIBRATED_BASELINE' | 'MODERATE' | 'DYNAMIC_REFINED';
+export type PreferredInitialTeachingStyle = 'CONCEPT_FIRST' | 'ANALOGY_HEAVY' | 'EXAMPLE_FIRST' | 'PRACTICE_FIRST';
+export type AssistanceLevelRequirement = 'INDEPENDENT_CHALLENGE' | 'STANDARD' | 'EXTENSIVE_SUPPORT';
+
+export interface ProfileCalibrationTask {
+  taskId: string;
+  taskType: 'READING_SPEED' | 'COMPREHENSION' | 'RECALL' | 'APPLICATION' | 'TEACHING_STYLE_PREFERENCE';
+  title: string;
+  instructions: string;
+  content: string;
+  options?: Array<{
+    optionId: string;
+    label: string;
+    isCorrect?: boolean;
+  }>;
+  estimatedSeconds: number;
+}
+
+export interface ProfileCalibrationAnswerSubmission {
+  taskId: string;
+  selectedOptionId?: string;
+  textAnswer?: string;
+  timeSpentSeconds: number;
+  submittedAt: string;
+}
+
+export interface ProfileCalibrationSession {
+  sessionId: string;
+  studentId: string;
+  startedAt: string;
+  completedAt?: string;
+  tasks: ProfileCalibrationTask[];
+  submissions: ProfileCalibrationAnswerSubmission[];
+  currentTaskIndex: number;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+}
+
+export interface StudyTimeModel {
+  baseReadingSpeedWpm: number;
+  complexityAdjustmentFactor: number;
+  conceptDensityMultiplier: number;
+  historicalActualVsPredictedRatio: number;
+  evidenceCount: number;
+}
+
+export interface TransparencyRationales {
+  readingPaceRationale: string;
+  assistanceLevelRationale: string;
+  studyPaceRationale: string;
+  preferredStyleRationale: string;
+}
+
+export interface CalibrationHistoryEntry {
+  calibratedAt: string;
+  readingSpeedWpm: number;
+  readingPaceLevel: ReadingPaceLevel;
+  comprehensionScore: number;
+  recallScore: number;
+  applicationScore: number;
+  assistanceLevel: AssistanceLevelRequirement;
+  preferredStyle: PreferredInitialTeachingStyle;
+  estimatedPace: EstimatedStudyPace;
+  source: string;
+}
+
+export interface PersonalLearningProfile {
+  studentId: string;
+  status: PersonalProfileStatus;
+  calibratedAt: string | null;
+  readingSpeedWpm: number;
+  readingPaceLevel: ReadingPaceLevel;
+  comprehensionScore: number;
+  comprehensionLevel: PerformanceLevel;
+  recallScore: number;
+  recallLevel: PerformanceLevel;
+  applicationScore: number;
+  applicationLevel: PerformanceLevel;
+  assistanceLevel: AssistanceLevelRequirement;
+  preferredInitialStyle: PreferredInitialTeachingStyle;
+  estimatedStudyPace: EstimatedStudyPace;
+  profileConfidence: ProfileConfidenceLevel;
+  studyTimeModel: StudyTimeModel;
+  rationales: TransparencyRationales;
+  calibrationHistory: CalibrationHistoryEntry[];
+  behavioralEvidenceCount?: number;
+  studyDurationObservationCount?: number;
+  updatedAt: string;
+}
+
+export interface EstimatedStudyTimeResult {
+  estimatedMinutes: number;
+  confidence: ProfileConfidenceLevel;
+  breakdown: {
+    baseReadingMinutes: number;
+    comprehensionProcessingMinutes: number;
+    conceptIntegrationMinutes: number;
+    masteryGapReviewMinutes: number;
+    complexityFactor: number;
+    adjustmentFactor: number;
+  };
+  rationale: string;
+}
+
+export interface TeacherCohortProfileAggregate {
+  classId: string;
+  totalCalibratedStudents: number;
+  paceDistribution: Record<EstimatedStudyPace, number>;
+  assistanceLevelDistribution: Record<AssistanceLevelRequirement, number>;
+  styleDistribution: Record<PreferredInitialTeachingStyle, number>;
+  averageEstimatedLessonMinutes: number;
+}
+
 

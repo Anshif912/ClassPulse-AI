@@ -211,6 +211,22 @@ export interface ModerationRecord {
   reason?: string;
 }
 
+import {
+  StudentLearnerProfile,
+  TopicMasteryRecord,
+  LearningEventRecord,
+  ClassroomConceptGraph,
+  ClassroomLearningState,
+  DiagnosticSession,
+  StudyGoal,
+  StudyPlan,
+  StudySessionState,
+  MisconceptionRecord,
+  RetentionItem,
+  PersonalLearningProfile,
+  ProfileCalibrationSession,
+} from './personalization/types';
+
 // ─── Full Database Schema ───────────────────────────────────────────────────
 interface DatabaseSchema {
   users: Record<string, User>;                           // keyed by User.id
@@ -226,6 +242,19 @@ interface DatabaseSchema {
   aiMessages: Record<string, AIMessage>;                 // keyed by id
   recordings: Record<string, RecordingSession>;          // keyed by id
   moderations: Record<string, Record<string, ModerationRecord>>; // keyed by classId -> userId
+  learnerProfiles: Record<string, StudentLearnerProfile>; // keyed by `lrn_${classId}_${studentId}`
+  topicMasteries: Record<string, TopicMasteryRecord>;     // keyed by `tm_${classId}_${studentId}_${topicId}`
+  learningEvents: Record<string, LearningEventRecord>;   // keyed by event.id
+  conceptGraphs: Record<string, ClassroomConceptGraph>;   // keyed by classId
+  classroomLearningStates: Record<string, ClassroomLearningState>; // keyed by classId
+  diagnosticSessions: Record<string, DiagnosticSession>; // keyed by sessionId
+  studyGoals: Record<string, StudyGoal>;                 // keyed by goal.id
+  studyPlans: Record<string, StudyPlan>;                 // keyed by plan.id
+  studySessions: Record<string, StudySessionState>;       // keyed by session.sessionId
+  misconceptions: Record<string, MisconceptionRecord>;   // keyed by record.id
+  retentionItems: Record<string, RetentionItem[]>;       // keyed by `ret_${classId}_${studentId}`
+  personalLearningProfiles: Record<string, PersonalLearningProfile>; // keyed by studentId (Layer 1)
+  profileCalibrationSessions: Record<string, ProfileCalibrationSession>; // keyed by sessionId
 }
 
 class DatabaseService {
@@ -264,6 +293,19 @@ class DatabaseService {
           aiMessages: parsed.aiMessages || {},
           recordings: parsed.recordings || {},
           moderations: parsed.moderations || {},
+          learnerProfiles: parsed.learnerProfiles || {},
+          topicMasteries: parsed.topicMasteries || {},
+          learningEvents: parsed.learningEvents || {},
+          conceptGraphs: parsed.conceptGraphs || {},
+          classroomLearningStates: parsed.classroomLearningStates || {},
+          diagnosticSessions: parsed.diagnosticSessions || {},
+          studyGoals: parsed.studyGoals || {},
+          studyPlans: parsed.studyPlans || {},
+          studySessions: parsed.studySessions || {},
+          misconceptions: parsed.misconceptions || {},
+          retentionItems: parsed.retentionItems || {},
+          personalLearningProfiles: parsed.personalLearningProfiles || {},
+          profileCalibrationSessions: parsed.profileCalibrationSessions || {},
         };
       }
     } catch (err) {
@@ -283,6 +325,19 @@ class DatabaseService {
       aiMessages: {},
       recordings: {},
       moderations: {},
+      learnerProfiles: {},
+      topicMasteries: {},
+      learningEvents: {},
+      conceptGraphs: {},
+      classroomLearningStates: {},
+      diagnosticSessions: {},
+      studyGoals: {},
+      studyPlans: {},
+      studySessions: {},
+      misconceptions: {},
+      retentionItems: {},
+      personalLearningProfiles: {},
+      profileCalibrationSessions: {},
     };
   }
 
@@ -522,10 +577,14 @@ class DatabaseService {
     );
   }
 
-  public getClassMembers(classId: string): Array<ClassMembership & { user: User }> {
-    const memberships = Object.values(this.data.memberships).filter(
+  public getMembershipsByClass(classId: string): ClassMembership[] {
+    return Object.values(this.data.memberships).filter(
       (m) => m.classId.toUpperCase() === classId.toUpperCase() && m.status === 'active'
     );
+  }
+
+  public getClassMembers(classId: string): Array<ClassMembership & { user: User }> {
+    const memberships = this.getMembershipsByClass(classId);
     return memberships
       .map((m) => {
         const user = this.data.users[m.userId];
@@ -890,6 +949,256 @@ class DatabaseService {
       delete this.data.moderations[upperClassId][userId];
       this.persist();
     }
+  }
+
+  // ─── Personalized Learning State & Learner Profiles ──────────────────────────
+  public getLearnerProfile(classId: string, studentId: string): StudentLearnerProfile | undefined {
+    const id = `lrn_${classId.toUpperCase()}_${studentId}`;
+    return this.data.learnerProfiles[id];
+  }
+
+  public saveLearnerProfile(profile: StudentLearnerProfile): StudentLearnerProfile {
+    this.data.learnerProfiles[profile.id] = profile;
+    this.persist();
+    return profile;
+  }
+
+  public getClassLearnerProfiles(classId: string): StudentLearnerProfile[] {
+    const upper = classId.toUpperCase();
+    return Object.values(this.data.learnerProfiles).filter(
+      (p) => p.classId.toUpperCase() === upper
+    );
+  }
+
+  public getTopicMastery(classId: string, studentId: string, topicId: string): TopicMasteryRecord | undefined {
+    const id = `tm_${classId.toUpperCase()}_${studentId}_${topicId}`;
+    return this.data.topicMasteries[id];
+  }
+
+  public getAllTopicMasteries(classId: string, studentId: string): TopicMasteryRecord[] {
+    const upper = classId.toUpperCase();
+    return Object.values(this.data.topicMasteries).filter(
+      (t) => t.classId.toUpperCase() === upper && t.studentId === studentId
+    );
+  }
+
+  public saveTopicMastery(record: TopicMasteryRecord): TopicMasteryRecord {
+    this.data.topicMasteries[record.id] = record;
+    this.persist();
+    return record;
+  }
+
+  public recordLearningEvent(event: LearningEventRecord): LearningEventRecord {
+    this.data.learningEvents[event.id] = event;
+    this.persist();
+    return event;
+  }
+
+  public getLearningEvents(classId: string, studentId: string, limit: number = 50): LearningEventRecord[] {
+    const upper = classId.toUpperCase();
+    return Object.values(this.data.learningEvents)
+      .filter((e) => e.classId.toUpperCase() === upper && e.studentId === studentId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+  }
+
+  public getConceptGraph(classId: string): ClassroomConceptGraph | undefined {
+    return this.data.conceptGraphs[classId.toUpperCase()];
+  }
+
+  public saveConceptGraph(graph: ClassroomConceptGraph): ClassroomConceptGraph {
+    this.data.conceptGraphs[graph.classId.toUpperCase()] = graph;
+    this.persist();
+    return graph;
+  }
+
+  public getClassroomLearningState(classId: string): ClassroomLearningState | undefined {
+    return this.data.classroomLearningStates[classId.toUpperCase()];
+  }
+
+  public saveClassroomLearningState(state: ClassroomLearningState): ClassroomLearningState {
+    this.data.classroomLearningStates[state.classId.toUpperCase()] = state;
+    this.persist();
+    return state;
+  }
+
+  // ─── Diagnostic Calibration Sessions ─────────────────────────────────────────
+  public getDiagnosticSession(sessionId: string): DiagnosticSession | undefined {
+    return this.data.diagnosticSessions[sessionId];
+  }
+
+  public getActiveDiagnosticSession(classId: string, studentId: string): DiagnosticSession | undefined {
+    const upperClassId = classId.toUpperCase();
+    return Object.values(this.data.diagnosticSessions).find(
+      (s) => s.classId.toUpperCase() === upperClassId && s.studentId === studentId && s.status === 'CALIBRATING'
+    );
+  }
+
+  public getLatestDiagnosticSession(classId: string, studentId: string): DiagnosticSession | undefined {
+    const upperClassId = classId.toUpperCase();
+    const sessions = Object.values(this.data.diagnosticSessions).filter(
+      (s) => s.classId.toUpperCase() === upperClassId && s.studentId === studentId
+    );
+    if (sessions.length === 0) return undefined;
+    return sessions.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
+  }
+
+  public saveDiagnosticSession(session: DiagnosticSession): DiagnosticSession {
+    this.data.diagnosticSessions[session.sessionId] = session;
+    this.persist();
+    return session;
+  }
+
+  // ─── Phase 4: Study Goals & Study Plans ──────────────────────────────────────
+  public getStudyGoal(goalId: string): StudyGoal | undefined {
+    return this.data.studyGoals[goalId];
+  }
+
+  public getActiveStudyGoal(classId: string, studentId: string): StudyGoal | undefined {
+    const upperClassId = classId.toUpperCase();
+    return Object.values(this.data.studyGoals).find(
+      (g) => g.classId.toUpperCase() === upperClassId && g.studentId === studentId && g.status === 'ACTIVE'
+    );
+  }
+
+  public saveStudyGoal(goal: StudyGoal): StudyGoal {
+    this.data.studyGoals[goal.id] = goal;
+    this.persist();
+    return goal;
+  }
+
+  public getStudyPlan(planId: string): StudyPlan | undefined {
+    return this.data.studyPlans[planId];
+  }
+
+  public getStudyPlanForGoal(goalId: string): StudyPlan | undefined {
+    return Object.values(this.data.studyPlans).find((p) => p.goalId === goalId);
+  }
+
+  public saveStudyPlan(plan: StudyPlan): StudyPlan {
+    this.data.studyPlans[plan.id] = plan;
+    this.persist();
+    return plan;
+  }
+
+  // ─── Phase 4: Adaptive Study Sessions ("Study With Me") ───────────────────────
+  public getStudySession(sessionId: string): StudySessionState | undefined {
+    return this.data.studySessions[sessionId];
+  }
+
+  public getActiveStudySession(classId: string, studentId: string): StudySessionState | undefined {
+    const upperClassId = classId.toUpperCase();
+    const activeSessions = Object.values(this.data.studySessions).filter(
+      (s) => s.classId.toUpperCase() === upperClassId && s.studentId === studentId && !s.completedAt
+    );
+    if (activeSessions.length === 0) return undefined;
+    return activeSessions.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
+  }
+
+  public saveStudySession(session: StudySessionState): StudySessionState {
+    this.data.studySessions[session.sessionId] = session;
+    this.persist();
+    return session;
+  }
+
+  // ─── Phase 4: Misconception Tracking & Repair ────────────────────────────────
+  public getStudentMisconceptions(classId: string, studentId: string): MisconceptionRecord[] {
+    const upperClassId = classId.toUpperCase();
+    return Object.values(this.data.misconceptions).filter(
+      (m) => m.classId.toUpperCase() === upperClassId && m.studentId === studentId && !m.resolved
+    );
+  }
+
+  public recordMisconceptionOccurrence(
+    classId: string,
+    studentId: string,
+    topicId: string,
+    topicName: string,
+    misconceptionKey: string,
+    description: string
+  ): MisconceptionRecord {
+    const upperClassId = classId.toUpperCase();
+    const id = `misc_${upperClassId}_${studentId}_${topicId}_${misconceptionKey}`;
+    const existing = this.data.misconceptions[id];
+    const now = new Date().toISOString();
+
+    if (existing) {
+      existing.errorFrequency += 1;
+      existing.isCandidate = existing.errorFrequency >= 1;
+      existing.isStable = existing.errorFrequency >= 2; // Stable if repeated >= 2
+      existing.lastObservedAt = now;
+      existing.resolved = false;
+      this.persist();
+      return existing;
+    }
+
+    const newRecord: MisconceptionRecord = {
+      id,
+      studentId,
+      classId: upperClassId,
+      topicId,
+      topicName,
+      misconceptionKey,
+      description,
+      errorFrequency: 1,
+      isCandidate: true,
+      isStable: false,
+      resolved: false,
+      lastObservedAt: now,
+    };
+    this.data.misconceptions[id] = newRecord;
+    this.persist();
+    return newRecord;
+  }
+
+  public resolveMisconception(classId: string, studentId: string, topicId: string, misconceptionKey?: string): void {
+    const upperClassId = classId.toUpperCase();
+    for (const m of Object.values(this.data.misconceptions)) {
+      if (m.classId.toUpperCase() === upperClassId && m.studentId === studentId && m.topicId === topicId) {
+        if (!misconceptionKey || m.misconceptionKey === misconceptionKey) {
+          m.resolved = true;
+          m.isStable = false;
+        }
+      }
+    }
+    this.persist();
+  }
+
+  // ─── Phase 4: Spaced Retention Queue ─────────────────────────────────────────
+  public getRetentionQueue(classId: string, studentId: string): RetentionItem[] {
+    const upperClassId = classId.toUpperCase();
+    const key = `ret_${upperClassId}_${studentId}`;
+    return this.data.retentionItems[key] || [];
+  }
+
+  public saveRetentionQueue(classId: string, studentId: string, items: RetentionItem[]): void {
+    const upperClassId = classId.toUpperCase();
+    const key = `ret_${upperClassId}_${studentId}`;
+    this.data.retentionItems[key] = items;
+    this.persist();
+  }
+
+  // ─── Phase 5: Personal Learning Profile (Layer 1) ───────────────────────────
+  public getPersonalLearningProfile(studentId: string): PersonalLearningProfile | null {
+    return this.data.personalLearningProfiles[studentId] || null;
+  }
+
+  public savePersonalLearningProfile(profile: PersonalLearningProfile): void {
+    this.data.personalLearningProfiles[profile.studentId] = profile;
+    this.persist();
+  }
+
+  public getAllPersonalLearningProfiles(): PersonalLearningProfile[] {
+    return Object.values(this.data.personalLearningProfiles);
+  }
+
+  public getProfileCalibrationSession(sessionId: string): ProfileCalibrationSession | null {
+    return this.data.profileCalibrationSessions[sessionId] || null;
+  }
+
+  public saveProfileCalibrationSession(session: ProfileCalibrationSession): void {
+    this.data.profileCalibrationSessions[session.sessionId] = session;
+    this.persist();
   }
 }
 

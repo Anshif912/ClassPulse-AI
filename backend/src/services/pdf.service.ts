@@ -119,11 +119,14 @@ export class PdfService {
       teacherId
     );
 
-    // 2. Compute 3072-d embeddings for all chunks in batch
-    const textsToEmbed = ragChunks.map((c) => c.text);
-    const embeddings = await EmbeddingService.embedBatch(textsToEmbed);
-    for (let i = 0; i < ragChunks.length; i++) {
-      ragChunks[i].embedding = embeddings[i];
+    // 2. Compute embeddings if in neural/hybrid mode (bypassed in lexical_fast mode)
+    const retrievalMode = (process.env.RAG_RETRIEVAL_MODE || 'lexical_fast').toLowerCase();
+    if (retrievalMode !== 'lexical_fast') {
+      const textsToEmbed = ragChunks.map((c) => c.text);
+      const embeddings = await EmbeddingService.embedBatch(textsToEmbed);
+      for (let i = 0; i < ragChunks.length; i++) {
+        ragChunks[i].embedding = embeddings[i];
+      }
     }
 
     // 3. Backward compatible legacy MaterialChunk format

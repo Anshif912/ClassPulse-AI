@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { RAGChunk, ChunkMetadata, LanguageCode } from './types';
 import { LanguageDetector } from './languageDetector';
+import { EmbeddingService } from './embeddingService';
 
 export interface PageTextUnit {
   pageNumber: number;
@@ -63,7 +64,7 @@ export class SemanticChunker {
 
         const isMajor = this.isMajorHeading(section);
 
-        // If a major heading starts and we already have accumulated content, flush previous chunk first!
+        // If a major heading starts and we already have accumulated content, flush previous chunk
         if (isMajor && currentParagraphs.length > 0) {
           const chunkBody = currentParagraphs.join('\n\n').trim();
           if (chunkBody.length > 0) {
@@ -86,9 +87,9 @@ export class SemanticChunker {
                 tokenCount: tokenEstimate,
                 language: detectedLang,
                 createdAt: new Date().toISOString(),
-                embeddingModel: 'text-embedding-3-large',
-                embeddingDimension: 3072,
-                embeddingVersion: 'embedding-v1',
+                embeddingModel: EmbeddingService.CURRENT_CONFIG.model,
+                embeddingDimension: EmbeddingService.CURRENT_CONFIG.dimensions,
+                embeddingVersion: EmbeddingService.CURRENT_CONFIG.version,
                 contentHash,
               },
               text: chunkBody,
@@ -137,9 +138,9 @@ export class SemanticChunker {
                 tokenCount: tokenEstimate,
                 language: detectedLang,
                 createdAt: new Date().toISOString(),
-                embeddingModel: 'text-embedding-3-large',
-                embeddingDimension: 3072,
-                embeddingVersion: 'embedding-v1',
+                embeddingModel: EmbeddingService.CURRENT_CONFIG.model,
+                embeddingDimension: EmbeddingService.CURRENT_CONFIG.dimensions,
+                embeddingVersion: EmbeddingService.CURRENT_CONFIG.version,
                 contentHash,
               },
               text: chunkBody,

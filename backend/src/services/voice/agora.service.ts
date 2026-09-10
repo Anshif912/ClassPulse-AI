@@ -55,7 +55,7 @@ export interface ActiveAgentSession {
   timeoutTimer?: NodeJS.Timeout;
 }
 
-const GEMINI_LIVE_SYSTEM_INSTRUCTIONS = `You are ClassPulse, a real-time AI classroom companion.
+const CLASSPULSE_VOICE_INSTRUCTIONS = `You are ClassPulse, a real-time AI classroom companion.
 Your job is to help a student understand what they are learning while remaining natural, warm, concise, and conversational.
 You participate in a live classroom powered by Agora.
 
@@ -77,10 +77,10 @@ LANGUAGE BEHAVIOR:
 
 CONVERSATION & CONTEXT:
 - Be conversational and concise.
-- Maintain multi-turn context (e.g. resolve "why were they so large?", "what about the second generation?", "say that in Tamil").
-- GREETING: For "hi", "hello", "வணக்கம்", "vanakkam", "namaste", greet warmly and briefly. Do NOT search or cite course materials.
-- GOODBYE: For "bye", "see you", "போயிட்டு வரேன்", respond briefly and politely. Do NOT search or cite course materials.
-- GENERAL QUESTIONS: If a question is not covered in teacher materials (e.g. "What is a GPU?"), state honestly that it is not in the uploaded notes, and explain the general concept clearly.
+- Maintain multi-turn context.
+- GREETING: For "hi", "hello", "வணக்கம்", "vanakkam", "namaste", greet warmly and briefly.
+- GOODBYE: For "bye", "see you", "போயிட்டு வரேன்", respond briefly and politely.
+- GENERAL QUESTIONS: If a question is not covered in teacher materials, state honestly that it is not in the uploaded notes, and explain the general concept clearly.
 - COURSE GROUNDING: When course materials/evidence are provided, ground your answers in them.
 - PRIVACY: Student questions are private.
 
@@ -145,7 +145,7 @@ export class AgoraService {
   } {
     const appId = (config.agora.appId || '').trim();
     const appCertificate = (config.agora.appCertificate || '').trim();
-    const voiceName = 'GeminiLive-Aoede';
+    const voiceName = 'en-US-JennyNeural';
     const tokenExpire = this.TOKEN_EXPIRY_SECONDS;
     const privilegeExpire = this.TOKEN_EXPIRY_SECONDS;
     const expiresAt = Math.floor(Date.now() / 1000) + this.TOKEN_EXPIRY_SECONDS;
@@ -182,6 +182,8 @@ export class AgoraService {
       throw new Error('Agora token generation returned empty token string.');
     }
 
+    console.log(`[AI_VOICE_TOKEN] appId=${appId ? appId.slice(0, 6) + '...' : 'missing'} channel=${channelName} uid=${uid} expiresAt=${expiresAt}`);
+
     return {
       token,
       appId,
@@ -193,7 +195,7 @@ export class AgoraService {
   }
 
   /**
-   * Starts a real Agora Conversational AI Agent with Gemini Live MLLM for a student.
+   * Starts a real Agora Conversational AI Agent session for a student.
    * Runs on a private AI sub-channel: `${classroomChannel}_ai_${studentUid}`
    */
   public async startAgentSession(
@@ -224,8 +226,6 @@ export class AgoraService {
 
     console.log(`[AI SESSION CREATE] sessionId=${sessionId} channel=${aiChannel} studentUid=${studentUid}`);
 
-    const geminiKey = config.gemini.apiKey.trim();
-    const agoraConfigured = Boolean(config.agora.appId && config.agora.appCertificate);
     const tokenRes = this.generateRtcToken(aiChannel, studentUid, 'publisher');
 
     if (!this.agoraClient) {
@@ -252,7 +252,7 @@ export class AgoraService {
 
     this.activeSessions.set(aiChannel, sessionData);
 
-    console.log(`[VOICE SERVICE] Pre-Gemini Voice session started for channel ${aiChannel} (student: ${studentUid})`);
+    console.log(`[VOICE SERVICE] ClassPulse Voice session started for channel ${aiChannel} (student: ${studentUid}, agent: ${agentUid})`);
 
     return {
       agentId: sessionData.agentId,
@@ -260,37 +260,6 @@ export class AgoraService {
       agentUid,
       state: 'connected',
       pipeline: 'primary',
-      token: tokenRes.token,
-      appId: tokenRes.appId,
-    };
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // 3. COMPLETE FAILURE: Both Primary & Fallback unavailable
-    // ──────────────────────────────────────────────────────────────────────────
-    const errSession: ActiveAgentSession = {
-      agentId: `unavailable_${Date.now()}`,
-      channelName: aiChannel,
-      sessionId,
-      classId,
-      studentUid,
-      agentUid,
-      state: 'unavailable',
-      pipeline: 'primary',
-      sessionInstance: null,
-      startedAt: Date.now(),
-      lastActivityAt: Date.now(),
-      errorMessage: 'Both Primary Gemini Live and Secondary Fallback are unavailable.',
-    };
-    this.activeSessions.set(aiChannel, errSession);
-
-    return {
-      agentId: errSession.agentId,
-      aiChannel,
-      agentUid,
-      state: 'unavailable',
-      pipeline: 'primary',
-      message: 'AI Voice unavailable',
-      developerDiagnostic: 'Both Primary Gemini Live and Secondary Agora Fallback failed to start.',
       token: tokenRes.token,
       appId: tokenRes.appId,
     };
@@ -435,14 +404,12 @@ export class AgoraService {
     agentProvider: string;
     model: string;
     voiceMode: string;
-    geminiConfigured: boolean;
     agoraConfigured: boolean;
     errorMessage?: string;
   } {
     const active = this.activeSessions.get(aiChannel);
-    const geminiConfigured = Boolean(config.gemini.apiKey && config.gemini.apiKey.trim().length > 0);
     const agoraConfigured = Boolean(config.agora.appId && config.agora.appCertificate);
-    const pipeline = active?.pipeline || (geminiConfigured ? 'primary' : 'fallback');
+    const pipeline = active?.pipeline || 'primary';
 
     return {
       channel: aiChannel,
@@ -451,10 +418,9 @@ export class AgoraService {
       agentId: active?.agentId,
       agentUid: active?.agentUid || 9999,
       transport: 'Agora RTC',
-      agentProvider: pipeline === 'fallback' ? 'Agora Conversational AI (Cascaded STT/LLM/TTS)' : 'Agora Conversational AI Agent',
-      model: pipeline === 'fallback' ? 'Cascaded STT+LLM+TTS' : 'Gemini Live (withMllm)',
-      voiceMode: pipeline === 'fallback' ? 'Cascaded Realtime Audio' : 'MLLM',
-      geminiConfigured,
+      agentProvider: 'Agora Conversational AI Agent',
+      model: 'ClassPulse Grounded AI',
+      voiceMode: 'Agora Realtime Audio',
       agoraConfigured,
       errorMessage: active?.errorMessage,
     };
@@ -465,29 +431,20 @@ export class AgoraService {
    */
   public getDiagnostics(): {
     configured: boolean;
-    geminiConfigured: boolean;
     agoraConfigured: boolean;
     installedAgentsVersion: string;
     primaryMode: string;
     primaryModel: string;
-    mllmMode: string;
-    model: string;
-    fallbackMode: string;
     transport: string;
     activeSessionsCount: number;
   } {
-    const geminiConfigured = Boolean(config.gemini.apiKey && config.gemini.apiKey.trim().length > 0);
     const agoraConfigured = Boolean(config.agora.appId && config.agora.appCertificate);
     return {
       configured: agoraConfigured,
-      geminiConfigured,
       agoraConfigured,
       installedAgentsVersion: '2.7.0',
-      primaryMode: 'GeminiLive (withMllm)',
-      primaryModel: 'gemini-live-2.5-flash',
-      mllmMode: 'GeminiLive',
-      model: 'gemini-live-2.5-flash',
-      fallbackMode: 'Agora Cascaded AI Agent (STT/LLM/TTS)',
+      primaryMode: 'Agora Conversational AI',
+      primaryModel: 'ClassPulse Grounded AI',
       transport: 'Agora RTC',
       activeSessionsCount: this.activeSessions.size,
     };

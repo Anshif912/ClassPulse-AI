@@ -86,22 +86,27 @@ router.get(
   requireAuth,
   requireMembership(),
   (req: Request, res: Response): void => {
-    const classId = req.params.classId.toUpperCase();
-    const active = dbService.getActiveRecordingSession(classId);
+    try {
+      const classId = req.params.classId.toUpperCase();
+      const active = dbService.getActiveRecordingSession(classId);
 
-    if (!active) {
+      if (!active) {
+        res.json({ isRecording: false, recording: null });
+        return;
+      }
+
+      res.json({
+        isRecording: true,
+        recording: {
+          id: active.id,
+          startedAt: active.startedAt,
+          status: active.status,
+        },
+      });
+    } catch (err: any) {
+      console.warn('[RECORDING_ACTIVE_GET_WARNING]', err?.message);
       res.json({ isRecording: false, recording: null });
-      return;
     }
-
-    res.json({
-      isRecording: true,
-      recording: {
-        id: active.id,
-        startedAt: active.startedAt,
-        status: active.status,
-      },
-    });
   }
 );
 

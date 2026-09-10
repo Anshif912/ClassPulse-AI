@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { dbService } from '../services/db.service';
 import { ragPipeline } from '../services/rag/ragPipeline';
 import { ragEngine } from '../services/rag/ragEngine';
+import { personalizedRAGAdapter } from '../services/personalization/personalizedRAGAdapter';
 import { requireAuth, requireMembership, rateLimit } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -54,10 +55,11 @@ router.post('/classroom',
         .slice(-5)
         .map((m) => m.content);
 
-      // 1. Process via Course-Grounded RAG 2.0 Pipeline
-      const ragResult = await ragPipeline.query(
+      // 1. Process via Adaptive Personalized RAG Adapter (Qwen3 4B)
+      const ragResult = await personalizedRAGAdapter.queryPersonalized(
         message.trim(),
         upperClassId,
+        req.user!.id,
         recentStudentQuestions
       );
 
@@ -76,7 +78,7 @@ router.post('/classroom',
         topic: ragResult.topic,
       });
 
-      console.log(`[AI_REQUEST] user=${req.user!.email} class=${upperClassId} lang=${ragResult.detectedLanguage} evidence=${ragResult.evidenceState}`);
+      console.log(`[AI_REQUEST] user=${req.user!.email} class=${upperClassId} lang=${ragResult.detectedLanguage} evidence=${ragResult.evidenceState} strategy=${ragResult.tutorDecision?.strategy}`);
 
       // Response matches the ChatMessage type the frontend expects
       res.json({
@@ -95,6 +97,9 @@ router.post('/classroom',
                 relevanceScore: ragResult.evidenceState === 'STRONG_EVIDENCE' ? 0.95 : 0.4,
               }
             : undefined,
+          tutorDecision: ragResult.tutorDecision,
+          transparencyRationale: ragResult.transparencyRationale,
+          suggestedFollowUpPractice: ragResult.suggestedFollowUpPractice,
         },
         spokenText: ragResult.spokenText || ragResult.answerText,
         detectedLanguage: ragResult.detectedLanguage,
@@ -103,6 +108,9 @@ router.post('/classroom',
         evidenceState: ragResult.evidenceState,
         sources: ragResult.sources,
         diagnostics: ragResult.diagnostics,
+        tutorDecision: ragResult.tutorDecision,
+        transparencyRationale: ragResult.transparencyRationale,
+        suggestedFollowUpPractice: ragResult.suggestedFollowUpPractice,
       });
     } catch (err: any) {
       console.error(`[AI_ERROR] user=${req.user!.email} class=${upperClassId}`, err.message);

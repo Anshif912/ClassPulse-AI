@@ -26,12 +26,14 @@ import {
   X,
   Check,
   Disc,
+  Brain,
 } from 'lucide-react';
 import { CreateClassResponse, Classroom, RecordingSession } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from './common/Logo';
 import { PixelSnow } from './effects/PixelSnow';
+import { TeacherAnalyticsModal } from './TeacherAnalyticsModal';
 
 export function TeacherDashboard() {
   const navigate = useNavigate();
@@ -55,6 +57,7 @@ export function TeacherDashboard() {
 
   // AI Insights & Past Meets state
   const [isInsightsModalOpen, setIsInsightsModalOpen] = useState(false);
+  const [isPersonalizationAnalyticsOpen, setIsPersonalizationAnalyticsOpen] = useState(false);
   const [insightsClassId, setInsightsClassId] = useState('');
   const [insightsData, setInsightsData] = useState<any | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
@@ -106,6 +109,7 @@ export function TeacherDashboard() {
   const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
   const [pdfTitle, setPdfTitle] = useState('');
   const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
+  const [uploadStatusText, setUploadStatusText] = useState('');
   const [materialError, setMaterialError] = useState<string | null>(null);
   const [materialSuccess, setMaterialSuccess] = useState<string | null>(null);
 
@@ -186,8 +190,12 @@ export function TeacherDashboard() {
     e.preventDefault();
     if (!selectedPdfFile || !selectedClassId) return;
     setIsUploadingMaterial(true);
+    setUploadStatusText('Uploading PDF document...');
     setMaterialError(null);
     setMaterialSuccess(null);
+
+    const timer1 = setTimeout(() => setUploadStatusText('Extracting text & Chunking...'), 300);
+    const timer2 = setTimeout(() => setUploadStatusText('Indexing into Fast Lexical Knowledge Base...'), 800);
 
     try {
       const result = await api.uploadClassroomPdf(
@@ -195,17 +203,22 @@ export function TeacherDashboard() {
         selectedPdfFile,
         pdfTitle.trim() || selectedPdfFile.name
       );
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       setSelectedPdfFile(null);
       setPdfTitle('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       setMaterialSuccess(
-        `"${result.title}" uploaded and indexed (${result.pageCount} pages, ${result.chunkCount} chunks) ready for AI Tutor!`
+        `Material ready for AI Tutor! ("${result.title}" indexed: ${result.pageCount} pages, ${result.chunkCount} chunks)`
       );
-      setTimeout(() => setMaterialSuccess(null), 6000);
+      setTimeout(() => setMaterialSuccess(null), 8000);
     } catch (err: any) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       setMaterialError(err.message || 'Failed to process PDF.');
     } finally {
       setIsUploadingMaterial(false);
+      setUploadStatusText('');
     }
   };
 
@@ -364,6 +377,17 @@ export function TeacherDashboard() {
           </button>
 
           <button
+            onClick={() => setIsPersonalizationAnalyticsOpen(true)}
+            className="p-4 bg-white rounded-2xl border border-[#E2E8F0] hover:border-indigo-500/50 hover:shadow-md transition-all text-left group cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-3 group-hover:scale-105 transition-transform">
+              <Brain className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-[#0F172A]">Adaptive Frontier</p>
+            <p className="text-[11px] text-[#64748B]">1-to-1 Mastery & Gaps</p>
+          </button>
+
+          <button
             onClick={() => {
               setIsRecordingsModalOpen(true);
               loadAllRecordings();
@@ -391,7 +415,7 @@ export function TeacherDashboard() {
               </div>
               <h3 className="text-lg font-black text-[#0F172A]">{activeLiveClass.name}</h3>
               <p className="text-xs text-[#64748B]">
-                {activeLiveClass.subject} • 12 students connected • {activeLiveClass.materialCount || 3} notes indexed
+                {activeLiveClass.subject} • {activeLiveClass.materialCount || 0} materials indexed
               </p>
             </div>
 
@@ -442,7 +466,7 @@ export function TeacherDashboard() {
                     <h4 className="font-bold text-sm text-[#0F172A] leading-snug">{cls.name}</h4>
 
                     <p className="text-[11px] text-[#64748B]">
-                      {cls.materialCount || 3} materials indexed for AI Tutor
+                      {cls.materialCount || 0} materials indexed for AI Tutor
                     </p>
                   </div>
 
@@ -519,22 +543,23 @@ export function TeacherDashboard() {
         {/* 6. Recent Activity Timeline */}
         <div className="p-6 bg-white rounded-2xl border border-[#E2E8F0] shadow-xs space-y-4">
           <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">Recent Activity</h3>
-          <div className="space-y-3">
-            {[
-              { icon: <FileText className="w-3.5 h-3.5 text-[#16A34A]" />, bg: 'bg-emerald-50', text: 'Physics Unit 2 indexed successfully', time: '2 hours ago' },
-              { icon: <Users className="w-3.5 h-3.5 text-[#2563EB]" />, bg: 'bg-blue-50', text: '12 students joined CS classroom', time: '3 hours ago' },
-              { icon: <Sparkles className="w-3.5 h-3.5 text-[#8B5CF6]" />, bg: 'bg-purple-50', text: 'New material "Data Structures.pdf" ready for AI Tutor', time: '5 hours ago' },
-              { icon: <Clock className="w-3.5 h-3.5 text-[#64748B]" />, bg: 'bg-slate-100', text: 'Class session ended (48 min)', time: '1 day ago' },
-            ].map((act, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-1.5 rounded-lg ${act.bg} shrink-0`}>{act.icon}</div>
-                  <span className="font-medium text-[#0F172A]">{act.text}</span>
+          {myClasses.length === 0 ? (
+            <p className="text-xs text-[#64748B] py-2">No activity yet. Create a classroom to begin.</p>
+          ) : (
+            <div className="space-y-3">
+              {myClasses.slice(0, 4).map((cls, i) => (
+                <div key={cls.classId || i} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-blue-50 text-[#2563EB] shrink-0">
+                      <GraduationCap className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-medium text-[#0F172A]">Classroom "{cls.name}" active</span>
+                  </div>
+                  <span className="text-[#94A3B8] text-[11px] font-mono">{cls.classId}</span>
                 </div>
-                <span className="text-[#94A3B8] text-[11px]">{act.time}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Create Classroom Modal ─────────────────────────────────────────── */}
@@ -633,9 +658,16 @@ export function TeacherDashboard() {
                 <button
                   type="submit"
                   disabled={isUploadingMaterial || !selectedPdfFile}
-                  className="w-full py-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  className="w-full py-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center justify-center gap-2"
                 >
-                  {isUploadingMaterial ? 'Uploading & Chunking...' : 'Upload & Ingest into AI'}
+                  {isUploadingMaterial ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{uploadStatusText || 'Indexing Material into AI...'}</span>
+                    </>
+                  ) : (
+                    'Upload & Ingest into AI'
+                  )}
                 </button>
               </form>
             </div>
@@ -776,22 +808,26 @@ export function TeacherDashboard() {
               </div>
 
               <div className="flex-1 overflow-y-auto py-4 space-y-3">
-                {[
-                  { title: 'Classroom Created', desc: 'CS101 Evolution of Computers live on Agora', time: 'Just now', icon: <Video className="w-3.5 h-3.5 text-[#2563EB]" />, bg: 'bg-blue-50' },
-                  { title: 'Course Notes Indexed', desc: 'Computer Generations PDF ready for AI Tutor', time: '10m ago', icon: <Sparkles className="w-3.5 h-3.5 text-[#8B5CF6]" />, bg: 'bg-purple-50' },
-                  { title: 'Student Connected', desc: 'Anshif joined Physics classroom session', time: '1h ago', icon: <Users className="w-3.5 h-3.5 text-[#16A34A]" />, bg: 'bg-emerald-50' },
-                ].map((n, i) => (
-                  <div key={i} className="p-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-lg ${n.bg}`}>{n.icon}</div>
-                        <h4 className="font-bold text-xs text-[#0F172A]">{n.title}</h4>
+                {myClasses.length === 0 ? (
+                  <p className="text-xs text-[#64748B] text-center py-6">No new notifications.</p>
+                ) : (
+                  myClasses.map((cls) => (
+                    <div key={cls.classId} className="p-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-blue-50 text-[#2563EB]">
+                            <Video className="w-3.5 h-3.5" />
+                          </div>
+                          <h4 className="font-bold text-xs text-[#0F172A]">{cls.name}</h4>
+                        </div>
+                        <span className="text-[10px] text-[#94A3B8] font-mono">{cls.classId}</span>
                       </div>
-                      <span className="text-[10px] text-[#94A3B8]">{n.time}</span>
+                      <p className="text-[11px] text-[#64748B] pl-8">
+                        {cls.materialCount || 0} materials indexed • Status: {cls.status}
+                      </p>
                     </div>
-                    <p className="text-[11px] text-[#64748B] pl-8">{n.desc}</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1156,6 +1192,13 @@ export function TeacherDashboard() {
             </div>
           </div>
         )}
+
+        {/* Adaptive 1-to-1 Learning Intelligence Modal */}
+        <TeacherAnalyticsModal
+          classId={selectedClassId || (myClasses.length > 0 ? myClasses[0].classId : '')}
+          isOpen={isPersonalizationAnalyticsOpen}
+          onClose={() => setIsPersonalizationAnalyticsOpen(false)}
+        />
       </main>
     </div>
   );

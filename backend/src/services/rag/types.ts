@@ -7,7 +7,7 @@ export type LanguageCode = 'en' | 'ta' | 'hi' | 'tanglish';
 export type EvidenceState = 'STRONG_EVIDENCE' | 'WEAK_EVIDENCE' | 'NO_EVIDENCE';
 
 export interface EmbeddingConfig {
-  provider: 'openai' | 'custom';
+  provider: 'openai' | 'qwen' | 'gemini' | 'deterministic_fallback' | 'custom';
   model: string;
   dimensions: number;
   normalization: 'L2';

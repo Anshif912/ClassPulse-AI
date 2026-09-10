@@ -11,6 +11,8 @@ import agoraRoutes from './routes/agora.routes';
 import classRoutes from './routes/classes.routes';
 import authRoutes from './routes/auth.routes';
 import recordingRoutes from './routes/recording.routes';
+import personalizationRoutes from './routes/personalization.routes';
+import { RAGProviderFactory } from './services/rag/providers/providerFactory';
 
 const app = express();
 
@@ -81,6 +83,8 @@ app.get('/', (_req: Request, res: Response) => {
 });
 
 app.get('/api/health', (_req: Request, res: Response) => {
+  const ragInfo = RAGProviderFactory.getActiveProvidersInfo();
+  const retrievalMode = (process.env.RAG_RETRIEVAL_MODE || config.rag?.retrievalMode || 'lexical_fast').toLowerCase();
   res.json({
     status: 'online',
     service: 'ClassPulse AI Backend',
@@ -89,6 +93,30 @@ app.get('/api/health', (_req: Request, res: Response) => {
     googleAuthConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     nativeClassroomMode: true,
     localRAGActive: true,
+    rag: {
+      retrievalMode,
+      retrieval: 'BM25 + deterministic lexical scoring',
+      llm: {
+        provider: 'Qwen',
+        model: ragInfo.llm.activeModel,
+        status: ragInfo.llm.status,
+        endpoint: config.rag.localLlmUrl,
+      },
+      embedding: {
+        provider: 'Qwen',
+        model: retrievalMode === 'lexical_fast' ? 'DISABLED_FOR_FAST_MODE' : ragInfo.embedding.activeModel,
+        dimensions: ragInfo.embedding.dimension,
+        status: retrievalMode === 'lexical_fast' ? 'DISABLED_FOR_FAST_MODE' : ragInfo.embedding.status,
+        endpoint: config.rag.localEmbeddingUrl,
+      },
+      reranker: {
+        provider: 'Qwen',
+        model: ragInfo.reranker.activeModel,
+        type: 'Neural Cross-Encoder',
+        status: ragInfo.reranker.status,
+        endpoint: config.rag.localRerankerUrl,
+      },
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -99,6 +127,7 @@ app.use('/api/classes', classRoutes);      // Classroom CRUD (auth-protected)
 app.use('/api/classes', recordingRoutes);  // Agora Cloud Recording (auth-protected)
 app.use('/api/agora', agoraRoutes);        // RTC token + attendance (auth-protected)
 app.use('/api/chat', chatRoutes);          // AI chat (classroom = auth-protected, legacy = open)
+app.use('/api/personalization', personalizationRoutes); // Adaptive Personalized Learning Layer
 app.use('/api/session', sessionRoutes);    // Legacy companion sessions (preserved)
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────

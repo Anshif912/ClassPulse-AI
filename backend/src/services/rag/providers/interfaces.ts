@@ -33,6 +33,7 @@ export interface LLMGenerateOptions {
   maxTokens?: number;
   systemPrompt?: string;
   language?: string;
+  timeoutMs?: number;
 }
 
 export interface LLMResponse {

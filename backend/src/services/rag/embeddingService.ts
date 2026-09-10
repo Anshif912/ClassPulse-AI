@@ -1,18 +1,52 @@
 import crypto from 'crypto';
 import { config } from '../../config';
 import { EmbeddingConfig, ChunkMetadata } from './types';
+import { RAGProviderFactory } from './providers/providerFactory';
 
 export class EmbeddingService {
-  public static readonly CURRENT_CONFIG: EmbeddingConfig = {
-    provider: 'openai',
-    model: 'text-embedding-3-large',
-    dimensions: 3072,
-    normalization: 'L2',
-    version: 'embedding-v1',
-  };
+  public static get CURRENT_CONFIG(): EmbeddingConfig {
+    const provider = (process.env.RAG_EMBEDDING_PROVIDER || config.rag?.embeddingProvider || 'qwen').toLowerCase();
+    if (provider === 'qwen' || provider === 'qwen3') {
+      return {
+        provider: 'qwen',
+        model: process.env.QWEN_EMBEDDING_MODEL || config.rag?.localEmbeddingModel || 'Qwen/Qwen3-Embedding-0.6B',
+        dimensions: 1024,
+        normalization: 'L2',
+        version: 'qwen3-v1',
+      };
+    } else if (provider === 'gemini') {
+      return {
+        provider: 'gemini',
+        model: 'text-embedding-004',
+        dimensions: 768,
+        normalization: 'L2',
+        version: 'gemini-v1',
+      };
+    } else if (provider === 'openai' && config.openai.apiKey) {
+      return {
+        provider: 'openai',
+        model: 'text-embedding-3-large',
+        dimensions: 3072,
+        normalization: 'L2',
+        version: 'openai-v1',
+      };
+    }
+    return {
+      provider: 'deterministic_fallback',
+      model: 'deterministic-1024-v1',
+      dimensions: 1024,
+      normalization: 'L2',
+      version: 'offline-v1',
+    };
+  }
 
-  public static readonly MODEL = EmbeddingService.CURRENT_CONFIG.model;
-  public static readonly DIMENSION = EmbeddingService.CURRENT_CONFIG.dimensions;
+  public static get MODEL(): string {
+    return this.CURRENT_CONFIG.model;
+  }
+
+  public static get DIMENSION(): number {
+    return this.CURRENT_CONFIG.dimensions;
+  }
 
   // In-memory cache of hash -> vector
   private static cache = new Map<string, number[]>();
@@ -28,14 +62,14 @@ export class EmbeddingService {
     version: string;
     isRealOpenAI: boolean;
   } {
-    const isRealOpenAI = Boolean(config.openai.apiKey && config.openai.apiKey.startsWith('sk-'));
+    const curr = this.CURRENT_CONFIG;
     return {
-      provider: isRealOpenAI ? 'openai' : 'test_only_fallback',
-      model: this.CURRENT_CONFIG.model,
-      dimensions: this.CURRENT_CONFIG.dimensions,
-      normalization: this.CURRENT_CONFIG.normalization,
-      version: this.CURRENT_CONFIG.version,
-      isRealOpenAI,
+      provider: curr.provider,
+      model: curr.model,
+      dimensions: curr.dimensions,
+      normalization: curr.normalization,
+      version: curr.version,
+      isRealOpenAI: curr.provider === 'openai' && Boolean(config.openai.apiKey?.startsWith('sk-')),
     };
   }
 
@@ -43,43 +77,37 @@ export class EmbeddingService {
    * Checks if a stored chunk was indexed with an outdated model, dimension, or version.
    */
   public static isReindexRequired(metadata: ChunkMetadata): boolean {
+    const curr = this.CURRENT_CONFIG;
     return (
-      metadata.embeddingModel !== this.CURRENT_CONFIG.model ||
-      metadata.embeddingDimension !== this.CURRENT_CONFIG.dimensions ||
-      metadata.embeddingVersion !== this.CURRENT_CONFIG.version
+      metadata.embeddingModel !== curr.model ||
+      metadata.embeddingDimension !== curr.dimensions ||
+      metadata.embeddingVersion !== curr.version
     );
   }
 
   /**
-   * Generates a 3072-dimensional normalized embedding for text.
-   * In production with OpenAI API key configured, uses OpenAI text-embedding-3-large.
-   * If OpenAI API key is not present, falls back strictly to the deterministic offline test vectorizer.
+   * Generates a normalized embedding for text using the active configured provider.
    */
-  public static async embedText(text: string): Promise<number[]> {
+  public static async embedText(text: string, isQuery: boolean = false): Promise<number[]> {
     const cleanText = text.trim();
     if (!cleanText) {
       return new Array(this.DIMENSION).fill(0);
     }
 
-    const hash = crypto.createHash('sha256').update(cleanText).digest('hex');
+    const hash = crypto.createHash('sha256').update(`${isQuery ? 'q:' : 'd:'}${cleanText}`).digest('hex');
     if (this.cache.has(hash)) {
       return this.cache.get(hash)!;
     }
 
-    let vector: number[];
+    const provider = RAGProviderFactory.getEmbeddingProvider();
+    const vector = await (provider as any).embedText(cleanText, isQuery);
 
-    if (config.openai.apiKey && config.openai.apiKey.startsWith('sk-')) {
-      try {
-        vector = await this.fetchOpenAIEmbedding(cleanText);
-      } catch (err: any) {
-        console.warn('[EMBEDDING_SERVICE] OpenAI embedding failed, using test-only fallback:', err.message);
-        vector = this.generateDeterministicTestOnlyVector(cleanText);
-      }
-    } else {
-      vector = this.generateDeterministicTestOnlyVector(cleanText);
+    if (!Array.isArray(vector) || vector.length !== this.DIMENSION) {
+      throw new Error(
+        `[EMBEDDING_DIMENSION_ERROR] Expected ${this.DIMENSION} dimensions, got ${vector?.length} from ${provider.model}`
+      );
     }
 
-    // Ensure L2 normalization
     const normalized = this.normalize(vector);
     this.cache.set(hash, normalized);
     return normalized;
@@ -88,13 +116,24 @@ export class EmbeddingService {
   /**
    * Batch embeds multiple texts.
    */
-  public static async embedBatch(texts: string[]): Promise<number[][]> {
-    const results: number[][] = [];
-    for (const text of texts) {
-      const vec = await this.embedText(text);
-      results.push(vec);
-    }
-    return results;
+  public static async embedBatch(
+    texts: string[],
+    isQuery: boolean = false,
+    options?: { materialName?: string; onProgress?: (info: any) => void }
+  ): Promise<number[][]> {
+    if (texts.length === 0) return [];
+
+    const provider = RAGProviderFactory.getEmbeddingProvider();
+    const vectors = await (provider as any).embedBatch(texts, isQuery, options);
+
+    return vectors.map((vec: number[], idx: number) => {
+      if (!Array.isArray(vec) || vec.length !== this.DIMENSION) {
+        throw new Error(
+          `[BATCH_EMBEDDING_DIMENSION_ERROR] Chunk ${idx} dimension mismatch: expected ${this.DIMENSION}, got ${vec?.length}`
+        );
+      }
+      return this.normalize(vec);
+    });
   }
 
   private static async fetchOpenAIEmbedding(text: string): Promise<number[]> {

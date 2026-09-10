@@ -2,7 +2,8 @@ import { LanguageCode, QueryTransformation, UserIntent } from './types';
 import { LanguageDetector } from './languageDetector';
 
 const FOLLOW_UP_PATTERNS = [
-  /^(give\s+me\s+an?\s+|can\s+you\s+give\s+(an?\s+|some\s+)?(real-?life\s+)?)?examples?/i,
+  /^(give\s+me\s+an?\s+|gimme\s+(an?\s+)?|give\s+(an?\s+|some\s+)?|tell\s+me\s+(an?\s+)?|show\s+me\s+(an?\s+)?|provide\s+(an?\s+)?|can\s+you\s+give\s+(an?\s+|some\s+)?(real-?life\s+)?)?examples?/i,
+  /\b(gimme|give\s+me|tell\s+me|show\s+me|provide|share)\s+(an?\s+)?(?:real-?life\s+|practical\s+)?examples?\b/i,
   /^(what\s+is\s+(its|the|that|this)\s+)?(formula|equation|unit|definition|value|issue|problem|limitation)\??$/i,
   /^why(\s+were\s+they|\s+was\s+it|\s+are\s+they|\s+is\s+it|\s+does\s+it|\s+did\s+they|\s+so|\s+large|\s+big|\s+important|(?:\s+don't\s+they)|\s+was\s+that)\b/i,
   /^how(\s+does\s+it|\s+did\s+they|\s+were\s+they|\s+come|\s+work|\s+did\s+they\s+cool)?\b/i,
@@ -41,6 +42,11 @@ const TRANSLATION_MAP: Array<{ regex: RegExp; replacement: string }> = [
   { regex: /3rd\s+generation|third\s+generation|மூன்றாம்\s*தலைமுறை|மூன்றாவது\s*தலைமுறை|तीसरी\s*पीढ़ी|teesri\s*peedhi/gi, replacement: 'third generation computers integrated circuits' },
   { regex: /4th\s+generation|fourth\s+generation|நான்காம்\s*தலைமுறை|நான்காவது\s*தலைமுறை|चौथी\s*पीढ़ी|chauthi\s*peedhi/gi, replacement: 'fourth generation computers microprocessors VLSI' },
   { regex: /5th\s+generation|fifth\s+generation|ஐந்தாம்\s*தலைமுறை|ஐந்தாவது\s*தலைமுறை|पांचवीं\s*पीढ़ी|panchvi\s*peedhi/gi, replacement: 'fifth generation computers artificial intelligence ULSI' },
+  { regex: /1st\s+generation|first\s+generation|முதல்\s*தலைமுறை|முதலாம்\s*தலைமுறை|पहली\s*पीढ़ी|pehli\s*peedhi|பர்ஸ்ட்\s*ஜெனரேஷன்|ஃபர்ஸ்ட்\s*ஜெனரேஷன்/gi, replacement: 'first generation computers vacuum tubes' },
+  { regex: /2nd\s+generation|second\s+generation|இரண்டாம்\s*தலைமுறை|இரண்டாவது\s*தலைமுறை|दूसरी\s*पीढ़ी|doosri\s*peedhi|செகண்ட்\s*ஜெனரேஷன்/gi, replacement: 'second generation computers transistors' },
+  { regex: /3rd\s+generation|third\s+generation|மூன்றாம்\s*தலைமுறை|மூன்றாவது\s*தலைமுறை|तीसरी\s*पीढ़ी|teesri\s*peedhi|தேர்ட்\s*ஜெனரேஷன்/gi, replacement: 'third generation computers integrated circuits' },
+  { regex: /4th\s+generation|fourth\s+generation|நான்காம்\s*தலைமுறை|நான்காவது\s*தலைமுறை|चौथी\s*पीढ़ी|chauthi\s*peedhi|போர்த்\s*ஜெனரேஷன்/gi, replacement: 'fourth generation computers microprocessors VLSI' },
+  { regex: /5th\s+generation|fifth\s+generation|ஐந்தாம்\s*தலைமுறை|ஐந்தாவது\s*தலைமுறை|पांचवीं\s*पीढ़ी|panchvi\s*peedhi|பிப்த்\s*ஜெனரேஷன்/gi, replacement: 'fifth generation computers artificial intelligence ULSI' },
   { regex: /all\s+(?:computer\s+)?generations|1st\s+to\s+5th|first\s+to\s+fifth/gi, replacement: 'Evolution of Computers First Second Third Fourth Fifth Generation comparison' },
   { regex: /vacuum\s*tubes?|வெற்றிடக்\s*குழாய்|வெற்றிட\s*குழாய்கள்|வैक्यूम\s*ट्यूब/gi, replacement: 'vacuum tubes' },
   { regex: /transistors?|டிரான்சிஸ்டர்|டிரான்சிஸ்டர்கள்|ट्रांजिस्टर/gi, replacement: 'transistors' },
@@ -57,11 +63,9 @@ const TRANSLATION_MAP: Array<{ regex: RegExp; replacement: string }> = [
   { regex: /mitochondria|powerhouse\s+of\s+cell|பவர்ஹவுஸ்|மைட்டோகாண்ட்ரியா|माइटोकॉन्ड्रिया/gi, replacement: 'mitochondria powerhouse ATP cell respiration' },
   { regex: /photosynthesis|ஒளிச்சேர்க்கை|प्रकाश\s*संश्लेषण/gi, replacement: 'photosynthesis 6CO2 glucose oxygen' },
   { regex: /ph\s*scale|acids?\s*(and|kum)?\s*bases?|neutralization|அமிலம்|காரம்|अम्ल|क्षार/gi, replacement: 'acids bases pH scale neutralization' },
-  { regex: /\b(stack|lifo)\b|ஸ்டாக்|स्टैक/gi, replacement: 'stack LIFO data structures' },
-  { regex: /\b(queue|fifo)\b|வரிசை/gi, replacement: 'queue FIFO data structures' },
-  { regex: /newton.*(?:3|third|तीसरा|மூன்றாம்).*(?:law|விதி|नियम)|newton\s*third\s*law|நியூட்டனின்\s*மூன்றாவது\s*விதி|न्यूटन\s*(?:का)?\s*तीसरा(?:\s*गति)?\s*नियम/gi, replacement: "Newton's third law action reaction equal opposite force rocket" },
-  { regex: /newton.*(?:1|first|पहला|முதலாம்).*(?:law|விதி|नियम)|inertia|நிலைமம்|जड़त्व/gi, replacement: "Newton's first law inertia state of rest motion" },
-  { regex: /newton.*(?:2|second|दूसरा|இரண்டாம்).*(?:law|விதி|नियम)|f\s*=\s*m\s*a|விசை/gi, replacement: "Newton's second law F=ma force mass acceleration" },
+  { regex: /newton.*(?:2|second|दूसरा|இரண்டாம்|இரண்டாவது|செகண்ட்).*(?:law|விதி|லா|நியம்|விசை|மோஷன்|motion)?|second\s*(?:law|of\s*motion|motion)|f\s*=\s*m\s*a|உந்த\s*மாறுபாடு|செகண்ட்\s*(?:லா|ஆஃப்|மோஷன்)?|நியூட்டன்.*(?:இரண்டாம்|இரண்டாவது|செகண்ட்|2)|बल.*द्रव्यमान.*त्वरण/gi, replacement: "Newton's second law F=ma force mass acceleration" },
+  { regex: /newton.*(?:3|third|तीसरा|மூன்றாம்|மூன்றாவது|தேர்ட்).*(?:law|விதி|லா|நியம்|வினை|மோஷன்|motion)?|newton\s*third\s*law|third\s*(?:law|of\s*motion|motion)|action.*reaction|செயல்.*எதிர்செயல்|தேர்ட்\s*(?:லா|ஆஃப்|மோஷன்)?|நியூட்டனின்\s*மூன்றாவது\s*விதி|நியூட்டன்.*(?:மூன்றாம்|மூன்றாவது|தேர்ட்|3)|क्रिया.*प्रतिक्रिया|न्यूटन\s*(?:का)?\s*तीसरा(?:\s*गति)?\s*नियम/gi, replacement: "Newton's third law action reaction equal opposite force rocket" },
+  { regex: /newton.*(?:1|first|पहला|முதலாம்|முதல்|பர்ஸ்ட்|ஃபர்ஸ்ட்).*(?:law|விதி|லா|நியம்|நிலைம|மோஷன்|motion)?|first\s*(?:law|of\s*motion|motion)|law\s*of\s*inertia|நிலைம(?:ம்| விதி)|பர்ஸ்ட்\s*(?:லா|ஆஃப்|மோஷன்)?|ஃபர்ஸ்ட்\s*(?:லா|ஆஃப்|மோஷன்)?|நியூட்டன்.*(?:முதல்|முதலாம்|பர்ஸ்ட்|ஃபர்ஸ்ட்|1)|जड़त्व/gi, replacement: "Newton's first law inertia state of rest motion" },
   { regex: /qubit|qubits|quantum\s*computing|குவாண்டம்|क्वांटम/gi, replacement: 'quantum computing qubits superposition' },
   { regex: /gpu|graphics\s*processing\s*unit/gi, replacement: 'GPU graphics processing unit parallel shaders' },
   { regex: /tcp\s*\/\s*ip|tcp\/ip/gi, replacement: 'TCP/IP networking protocol stack packets' },
@@ -106,8 +110,10 @@ export class QueryTransformer {
     let resolvedSubject = '';
 
     // 2. Multi-turn Follow-up Resolution & Anaphora
+    const hasExplicitStandaloneTopic = /(?:first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)\s+(?:generation|law|gen)|newton(?:'s|\s+oda|\s+ka|\s+ki)?|photosynthesis|mitochondria|cell\s+structure|dna|quadratic|linear\s+equations?|thermodynamics|periodic\s+table|chemical\s+bonding|acids?\s+and\s+bases?|ph\s+scale|stack|queue|gravity|vacuum\s+tubes?|transistors?|microprocessors?|integrated\s+circuits?|முதல்\s*தலைமுறை|இரண்டாம்\s*தலைமுறை|மூன்றாம்\s*தலைமுறை|நான்காம்\s*தலைமுறை|ஐந்தாம்\s*தலைமுறை|நியூட்டன்|நிலைம/i.test(originalQuery);
+
     const isFollowUpMatch = FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(originalQuery));
-    if ((isFollowUpMatch || originalQuery.split(/\s+/).length <= 4) && recentStudentQuestions.length > 0) {
+    if (!hasExplicitStandaloneTopic && isFollowUpMatch && recentStudentQuestions.length > 0) {
       isFollowUp = true;
 
       // Scan history from newest to oldest for explicit topic entities
@@ -173,11 +179,11 @@ export class QueryTransformer {
     const entities: string[] = [];
 
     // Extract target generation / entity mentions
-    if (/first|1st|முதல்|முதலாம்|पहली/i.test(q)) entities.push('1st Generation');
-    if (/second|2nd|இரண்டாம்|இரண்டாவது|दूसरी/i.test(q)) entities.push('2nd Generation');
-    if (/third|3rd|மூன்றாம்|மூன்றாவது|तीसरी/i.test(q)) entities.push('3rd Generation');
-    if (/fourth|4th|நான்காம்|நான்காவது|चौथी/i.test(q)) entities.push('4th Generation');
-    if (/fifth|5th|ஐந்தாம்|ஐந்தாவது|पांचवीं/i.test(q)) entities.push('5th Generation');
+    if (/\b(?:1st|first)\s+(?:generation|gen)\b|முதல்\s*தலைமுறை|முதலாம்\s*தலைமுறை|पहली\s*पीढ़ी/i.test(q)) entities.push('1st Generation');
+    if (/\b(?:2nd|second)\s+(?:generation|gen)\b|இரண்டாம்\s*தலைமுறை|இரண்டாவது\s*தலைமுறை|दूसरी\s*पीढ़ी/i.test(q)) entities.push('2nd Generation');
+    if (/\b(?:3rd|third)\s+(?:generation|gen)\b|மூன்றாம்\s*தலைமுறை|மூன்றாவது\s*தலைமுறை|तीसरी\s*पीढ़ी/i.test(q)) entities.push('3rd Generation');
+    if (/\b(?:4th|fourth)\s+(?:generation|gen)\b|நான்காம்\s*தலைமுறை|நான்காவது\s*தலைமுறை|चौथी\s*पीढ़ी/i.test(q)) entities.push('4th Generation');
+    if (/\b(?:5th|fifth)\s+(?:generation|gen)\b|ஐந்தாம்\s*தலைமுறை|ஐந்தாவது\s*தலைமுறை|पांचवीं\s*पीढ़ी/i.test(q)) entities.push('5th Generation');
     if (/vacuum\s*tube|வெற்றிடக்\s*குழாய்|वैक्यूम\s*ट्यूब/i.test(q)) entities.push('Vacuum Tubes');
     if (/transistor|டிரான்சிஸ்டர்|ट्रांजिस्टर/i.test(q)) entities.push('Transistors');
     if (/integrated\s*circuit|ic\s*chip|நுண்\s*சுற்று|इंटीग्रेटेड\s*सर्किट/i.test(q)) entities.push('Integrated Circuits');
